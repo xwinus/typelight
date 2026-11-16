@@ -1,11 +1,14 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#14110f">
 <meta name="color-scheme" content="dark">
 <title>Typelight</title>
+<meta name="description" content="A typewriter for the small hours: a sheet of paper, a type head, and a lamp.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -25,7 +28,9 @@
     --lh: 32px;
     --ly: 50vh;
     --R: 600px;
+    --desk-tile: 1200px;
     --move: 70ms;
+    --ease: cubic-bezier(.2,.7,.2,1);
     --feed: 150ms;
   }
 
@@ -37,7 +42,8 @@
     position: absolute; left: 0; top: 0; width: 100%;
     height: var(--vh, 100dvh);
     overflow: hidden;
-    background-color: var(--desk);
+    /* a photographed, worn table top (see textures/README.md); the flat colour shows until it loads */
+    background: var(--desk) url(textures/desk.jpg) 0 0 / var(--desk-tile) var(--desk-tile);
     font: 400 var(--fs)/var(--lh) "Courier Prime", "Courier New", Courier, monospace;
     font-variant-ligatures: none;
     cursor: text;
@@ -93,6 +99,18 @@
   .rail::after { right: 0; }
 
   /* ---------- light ---------- */
+  /* The light is computed per pixel on the GPU (see "The lamp" in the script) and
+     multiplied over paper, ink, rail and desk. The gradient version below it is
+     the fallback for browsers without WebGL. */
+  .light-gl {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 2;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    display: none;
+  }
+  .has-gl .light-gl { display: block; }
+  .has-gl .light { display: none; }
+
   /* An isolated group: dusk as the base, the lamp added on top of it,
      and the whole thing multiplied over paper, ink, rail and desk. */
   .light {
@@ -115,7 +133,7 @@
     mix-blend-mode: screen;
     opacity: var(--lamp);
     will-change: transform;
-    transition: transform var(--move) cubic-bezier(.2,.7,.2,1), opacity .5s ease;
+    transition: transform var(--move) var(--ease), opacity .5s ease;
     animation: warm-up 1.5s ease-out backwards;
   }
   @keyframes warm-up {
@@ -130,7 +148,7 @@
     position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 3;
     pointer-events: none;
     will-change: transform;
-    transition: transform var(--move) cubic-bezier(.2,.7,.2,1);
+    transition: transform var(--move) var(--ease);
   }
   .head i { position: absolute; display: block; }
   .kick { position: absolute; left: 0; top: 0; }
@@ -192,7 +210,11 @@
     transition: opacity .7s ease;
   }
   .hud.quiet { opacity: 0; pointer-events: none; }
-  .hud .count { padding: 8px 10px; white-space: nowrap; }
+  .hud .brand { display: flex; align-items: center; gap: 9px; padding: 8px 10px; white-space: nowrap; }
+  .hud .mark { width: 17px; height: 17px; flex: none; margin-top: -2px; overflow: visible; }
+  .hud .mark-lamp { fill: #f4bd6c; filter: drop-shadow(0 0 3px rgba(255,180,95,.75)); }
+  .hud .mark-t { fill: rgba(243,231,207,.82); }
+  .hud .name { color: rgba(243,231,207,.82); margin-right: 9px; }
   .hud nav { display: flex; flex-wrap: wrap; justify-content: flex-end; }
   .hud button {
     all: unset; cursor: pointer; padding: 8px 10px; border-radius: 4px; white-space: nowrap;
@@ -216,6 +238,7 @@
     <div class="rail"></div>
   </div>
 
+  <canvas class="light-gl" id="gl" aria-hidden="true"></canvas>
   <div class="light"><div class="beam" id="beam"></div></div>
 
   <div class="head" id="head" aria-hidden="true">
@@ -230,12 +253,19 @@
   <textarea id="ta" aria-label="Text" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"></textarea>
 
   <footer class="hud" id="hud">
-    <span class="count" id="count">0 slov</span>
+    <div class="brand">
+      <svg class="mark" viewBox="12 13 40 39" aria-hidden="true">
+        <path class="mark-lamp" d="M15 31a17 17 0 0 1 34 0z"/>
+        <path class="mark-t" d="M13 34h38v9h-4v-4H34.5v8H41v4H23v-4h6.5v-8H17v4h-4z"/>
+      </svg>
+      <span class="name">Typelight</span>
+      <span class="count" id="count">0 words</span>
+    </div>
     <nav>
-      <button type="button" id="bLamp" title="Jas lampy"></button>
-      <button type="button" id="bSound" title="Zvuky stroje"></button>
-      <button type="button" id="bSave" title="Stáhnout text jako soubor (⌘S / Ctrl+S)">Uložit .txt</button>
-      <button type="button" id="bNew" title="Smazat text a začít na čistém listu">Nový list</button>
+      <button type="button" id="bLamp" title="Lamp brightness"></button>
+      <button type="button" id="bSound" title="Typewriter sounds"></button>
+      <button type="button" id="bSave" title="Download the text as a file (⌘S / Ctrl+S)">Save .txt</button>
+      <button type="button" id="bNew" title="Clear the text and start on a blank sheet">New sheet</button>
     </nav>
   </footer>
 
@@ -253,11 +283,12 @@ const beam = $('beam'), head = $('head'), kick = $('kick'), bulb = $('bulb');
 const ta = $('ta'), hud = $('hud'), probe = $('probe'), countEl = $('count');
 
 const TEXT_KEY = 'typelight.text', PREF_KEY = 'typelight.prefs';
+const DESK_TILE = 36;       // one tile of the desk photograph, in line heights
 const TOP_ROWS = 3;        // blank lines above the first line of the sheet
 const EDGE = 80;           // how far the sheet's top edge may leave the screen
 const BELL_BEFORE = 8;     // the bell rings this many columns before the margin
 const LAMPS = [.5, .76, 1];
-const LAMP_NAMES = ['tlumená', 'střední', 'naplno'];
+const LAMP_NAMES = ['low', 'medium', 'full'];
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const S = {
@@ -370,15 +401,256 @@ function renderLines() {
     if (el._ln !== ln) {
       el._ln = ln;
       el.innerHTML = S.text.length === 0
-        ? '<span class="ghost">Začni psát…</span>'
+        ? '<span class="ghost">Start typing…</span>'
         : lineHTML(ln.s, ln.e);
     }
   }
 }
 
-function place(moveMs, feedMs) {
+/* ------------------------------------------------------------------ *
+ * The lamp. A small hooded bulb on the head, a couple of line heights
+ * above the paper, aimed up the page. For every pixel the shader works
+ * out how much of its light lands there:
+ *   - the hood cuts the beam off behind the lamp, with a soft penumbra
+ *   - the reflector throws most of the light forward, unevenly
+ *   - brightness falls with the square of the distance
+ *   - the light arrives at a low angle, so it rakes across the paper and
+ *     picks out its tooth, its fibres and the slight waviness of the sheet
+ * The result is exposed like a photograph, which is what makes the hot
+ * spot bleach towards white while the edges stay amber.
+ * ------------------------------------------------------------------ */
+const light = (() => {
+  const cv = $('gl');
+  const WRAP = 4800;            // the paper texture repeats after this many px of scroll
+  let gl = null, U = null, raf = 0, until = 0;
+  let level = 0, last = 0, born = performance.now(), struck = -1e9;
+
+  const VERT = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }';
+  const FRAG = `
+precision highp float;
+uniform vec2 uRes;      // viewport, css px
+uniform float uDpr;
+uniform vec3 uLamp;     // bulb: x, y (css px, y down) and height above the paper
+uniform float uLevel;
+uniform vec4 uPaper;    // left, right, top edge, and how far the sheet has travelled
+uniform float uLh;      // line height, the unit everything scales with
+uniform sampler2D uDesk;  // normal map of the desk
+uniform vec2 uDeskTile;   // its tile size in css px, and 1 once it has loaded
+
+const float TILT  = 0.95;   // beam axis, radians away from straight down, towards the top of the page
+const float OUTER = 1.45;   // the hood cuts everything beyond this angle from the axis
+const float INNER = 1.15;   // ... and the penumbra starts here
+const float FOCUS = 1.2;    // how tightly the reflector gathers the beam
+const float EXPOSURE = 7.0;
+const vec3 AMBIENT = vec3(0.289, 0.278, 0.316);   // cool dusk, before exposure
+
+float hash(vec2 p) {
+  vec3 q = fract(vec3(p.xyx) * .1031);
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.x + q.y) * q.z);
+}
+float noise(vec2 p, vec2 period) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3. - 2. * f);
+  float a = hash(mod(i, period)), b = hash(mod(i + vec2(1., 0.), period));
+  float c = hash(mod(i + vec2(0., 1.), period)), d = hash(mod(i + vec2(1., 1.), period));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+// height of the sheet's surface: a slow cockle and short fibres lying across the page
+float sheet(vec2 q) {
+  return 3.4 * noise(q / 160., vec2(8192., 30.))
+       + .11 * noise(q / vec2(14., 4.), vec2(8192., 1200.));
+}
+
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y * uDpr - gl_FragCoord.y) / uDpr;
+  bool onPaper = p.x >= uPaper.x && p.x <= uPaper.y && p.y >= uPaper.z;
+
+  // surface slope under this pixel
+  vec2 slope = vec2(0.);
+  vec3 n;
+  if (onPaper) {
+    vec2 q = vec2(p.x - uPaper.x, p.y - uPaper.w);
+    float h0 = sheet(q);
+    slope = vec2(sheet(q + vec2(1., 0.)) - h0, sheet(q + vec2(0., 1.)) - h0);
+    vec2 cell = mod(floor(q / 1.5), vec2(8192., 3200.));        // the tooth of the paper
+    slope += (vec2(hash(cell), hash(cell + 71.3)) - .5) * .085;
+    n = normalize(vec3(-slope, 1.));
+  } else if (uDeskTile.y > .5) {
+    // the desk: the scanned relief of the real table, aligned with its photograph.
+    // The map's green axis points up the image; here y runs down the screen.
+    vec3 m = texture2D(uDesk, p / uDeskTile.x).xyz * 2. - 1.;
+    n = normalize(vec3(m.x * 1.6, -m.y * 1.6, m.z));
+  } else {
+    n = vec3(0., 0., 1.);
+  }
+
+  vec3 toLamp = vec3(uLamp.xy - p, uLamp.z);
+  float d = length(toLamp);
+  vec3 l = toLamp / d;
+  float facing = max(dot(n, l), 0.);                 // raking light: shallow angle, long shadows
+
+  vec3 axis = vec3(0., -sin(TILT), -cos(TILT));
+  float ct = dot(-l, axis);
+  float theta = acos(clamp(ct, -1., 1.));
+  float hood = smoothstep(cos(OUTER), cos(INNER), ct);
+  float beam = pow(max(ct, 0.), FOCUS);
+
+  // a cheap reflector is never even: faint rings, and streaks fanning out from the bulb
+  vec3 side = cross(axis, vec3(1., 0., 0.));
+  float around = atan(dot(-l, side), -l.x);
+  float streaks = noise(vec2(around * 5. + 20., 3.5), vec2(64.)) - .5;
+  float rings = sin(theta * 44.);
+  float flaws = 1. + .22 * streaks * smoothstep(.15, 1.1, theta) + .03 * rings;
+
+  float lit = uLevel * EXPOSURE * beam * hood * flaws * facing * (uLamp.z * uLamp.z) / (d * d);
+
+  // what leaks under the hood and bounces off the machine: weak, close, all around
+  float r = length(uLamp.xy - p);
+  float spill = uLevel * .11 / (1. + r * r / (uLh * uLh * 30.));
+
+  // the room is not even either: a little more dusk from the upper left
+  vec2 uv = p / uRes;
+  vec3 dusk = AMBIENT * (1.1 - .2 * (uv.x * .6 + uv.y * .4));
+
+  vec3 warm = mix(vec3(1., .62, .34), vec3(1., .80, .56), hood);   // redder in the penumbra
+  vec3 c = dusk + warm * lit + vec3(1., .74, .5) * spill;
+  c = 1. - exp(-c);
+  c += (hash(gl_FragCoord.xy) - .5) / 255.;          // dither, so the falloff does not band
+  gl_FragColor = vec4(c, 1.);
+}`;
+
+  function init() {
+    try {
+      gl = cv.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false });
+      if (!gl) return false;
+      const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+      if (!hp || hp.precision < 23) return false;      // the paper texture needs real floats
+      const compile = (type, src) => {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+        return sh;
+      };
+      const prog = gl.createProgram();
+      gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+      gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      gl.useProgram(prog);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const a = gl.getAttribLocation(prog, 'a');
+      gl.enableVertexAttribArray(a);
+      gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+      U = {};
+      for (const name of ['uRes', 'uDpr', 'uLamp', 'uLevel', 'uPaper', 'uLh', 'uDesk', 'uDeskTile']) U[name] = gl.getUniformLocation(prog, name);
+      loadDesk();
+    } catch (err) {
+      console.warn('Typelight: WebGL light unavailable, using the simple one.', err);
+      gl = null;
+      return false;
+    }
+    cv.addEventListener('webglcontextlost', e => {
+      e.preventDefault();
+      gl = null;
+      root.classList.remove('has-gl');
+    });
+    root.classList.add('has-gl');
+    return true;
+  }
+
+  // The desk's relief arrives a moment after the page; until then the desk is lit as if flat.
+  // Opened straight from disk the browser will not hand the image to WebGL, and it stays flat.
+  let deskReady = false;
+  function loadDesk() {
+    const img = new Image();
+    img.onload = () => {
+      if (!gl) return;
+      try {
+        gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.uniform1i(U.uDesk, 0);
+        deskReady = true;
+        wake();
+      } catch (err) {
+        console.warn('Typelight: the desk relief could not be used.', err);
+      }
+    };
+    img.src = 'textures/desk-normal.jpg';
+  }
+
+  function size() {
+    if (!gl) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(S.vw * dpr);
+    cv.height = Math.round(S.vh * dpr);
+    gl.viewport(0, 0, cv.width, cv.height);
+    wake();
+  }
+
+  const at = el => new DOMMatrixReadOnly(getComputedStyle(el).transform);
+  // the bulb coming on: a first glow, a dip, then up to full
+  const warmUp = w => w < .18 ? .45 * w / .18 : w < .3 ? .45 - .25 * (w - .18) / .12 : .2 + .8 * (1 - Math.pow(1 - (w - .3) / .7, 2));
+
+  function frame(now) {
+    raf = 0;
+    if (!gl) return;
+    // Head and paper move by CSS transitions; read where they are right now.
+    const h = at(head), paperY = at(linesEl).m42, top = at(sheet).m42;
+
+    const target = LAMPS[S.lamp];
+    const dt = Math.min(100, now - last);
+    last = now;
+    level += (target - level) * (reduce ? 1 : 1 - Math.exp(-dt / 130));
+    let k = level, dy = 0;
+    const w = (now - born) / 1500;
+    if (!reduce && w < 1) k *= warmUp(Math.max(0, w));
+    const since = now - struck;                     // a strike shakes the filament for a moment
+    const ringing = !reduce && since < 280;
+    if (ringing) {
+      const a = Math.exp(-since / 65);
+      k *= 1 - .1 * a * Math.cos(since / 9);
+      dy = 1.6 * a * Math.cos(since / 15);
+    }
+
+    const dpr = cv.width / S.vw;
+    gl.uniform2f(U.uRes, S.vw, S.vh);
+    gl.uniform1f(U.uDpr, dpr);
+    gl.uniform3f(U.uLamp, h.m41 + S.chw / 2, h.m42 + S.lh + 2 + dy, S.lh * 5.2);
+    gl.uniform1f(U.uLevel, k);
+    gl.uniform4f(U.uPaper, S.left, S.left + (S.cols + 2 * S.margin) * S.chw, top, ((paperY % WRAP) + WRAP) % WRAP);
+    gl.uniform1f(U.uLh, S.lh);
+    gl.uniform2f(U.uDeskTile, S.lh * DESK_TILE, deskReady ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    if (now < until || Math.abs(target - level) > .003 || (!reduce && w < 1) || ringing) raf = requestAnimationFrame(frame);
+  }
+
+  // Nothing is drawn while nothing changes; callers say for how long things will move.
+  function wake(ms = 0) {
+    until = Math.max(until, performance.now() + ms);
+    if (gl && !raf) raf = requestAnimationFrame(frame);
+  }
+
+  return {
+    init, size, wake,
+    strike() { struck = performance.now(); wake(300); },
+  };
+})();
+
+const EASE_STEP = 'cubic-bezier(.2,.7,.2,1)', EASE_RETURN = 'cubic-bezier(.3,0,.6,1)';
+
+function place(moveMs, feedMs, ease = EASE_STEP) {
   root.style.setProperty('--move', moveMs + 'ms');
   root.style.setProperty('--feed', feedMs + 'ms');
+  root.style.setProperty('--ease', ease);
   const { lh, ly, row, col, chw } = S;
   const y = ly - row * lh + S.scroll;
   linesEl.style.transform = `translate3d(0,${y}px,0)`;
@@ -393,6 +665,7 @@ function place(moveMs, feedMs) {
   head.style.transform = `translate3d(${hx}px,${ly}px,0)`;
   beam.style.transform = `translate3d(${hx + chw / 2}px,${ly - lh * 2.2}px,0)`;
   ta.style.transform = `translate3d(${Math.max(0, Math.min(hx, S.vw - 24))}px,${ly}px,0)`;
+  light.wake(Math.max(moveMs, feedMs) + 120);
 }
 
 function measure() {
@@ -418,6 +691,7 @@ function measure() {
   root.style.setProperty('--lh', lh + 'px');
   root.style.setProperty('--ly', S.ly + 'px');
   root.style.setProperty('--R', Math.round(Math.min(27 * lh, S.vw * .8)) + 'px');
+  root.style.setProperty('--desk-tile', lh * DESK_TILE + 'px');
 
   if (changed) {
     for (const el of els.values()) el.remove();
@@ -427,132 +701,178 @@ function measure() {
   }
   S.scroll = Math.max(0, Math.min(S.row * S.lh, S.scroll));
   S.snapFrom = S.scroll;
+  light.size();
   place(0, 0);
   renderLines();
 }
 
 /* ------------------------------------------------------------------ *
- * Sound: everything is synthesised, there are no audio files.
+ * Sound: recordings of one real typewriter (see sounds/README.md).
+ * Each strike plays a different take, with a little variation in pitch
+ * and force, so no two keys in a row sound the same.
  * ------------------------------------------------------------------ */
+const RETURN_SWEEP = .76;    // seconds the carriage takes to cross the full line in the recording
+
 const snd = (() => {
-  let ctx = null, noise = null, pans = null, lastTick = 0;
+  const DIR = 'sounds/';
+  const LEVEL = { key: 1, space: .8, back: .6, bell: .3, ret: .8, feed: .8 };
+  let ctx = null, out = null;
+  let bank = null;           // decoded samples by kind, once loaded
+  let failed = false;
+  let lastTick = 0;
+  const bags = {}, lastOf = {};
   const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // Decoding needs no running AudioContext, so the samples are ready before the first key.
+  async function load() {
+    try {
+      const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const dec = new Off(2, 1, 48000);
+      let version = '';
+      const get = async (name, retry = true) => {
+        try {
+          const r = await fetch(DIR + name + version);
+          if (!r.ok) throw new Error(name + ': HTTP ' + r.status);
+          const data = await r.arrayBuffer();
+          return await new Promise((res, rej) => dec.decodeAudioData(data, res, rej));
+        } catch (err) {
+          if (!retry) throw err;
+          await new Promise(res => setTimeout(res, 400));
+          return get(name, false);
+        }
+      };
+      // The manifest is always revalidated; the samples carry its version, so a rebuilt
+      // set replaces the cached one and an unchanged set is never downloaded twice.
+      const man = await fetch(DIR + 'manifest.json', { cache: 'no-cache' });
+      if (!man.ok) throw new Error('manifest.json: HTTP ' + man.status);
+      const m = await man.json();
+      if (m.version) version = '?v=' + m.version;
+
+      // A few files at a time: small dev servers drop connections when hit with all of them at once.
+      const names = [...m.key, ...m.space, ...m.bell, ...m.feed, ...m.return.map(r => r.file)];
+      const bufs = {};
+      const worker = async () => {
+        while (names.length) {
+          const name = names.shift();
+          bufs[name] = await get(name);
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+
+      const of = list => list.map(name => bufs[name]);
+      bank = {
+        key: of(m.key), space: of(m.space), bell: of(m.bell), feed: of(m.feed),
+        ret: m.return.map(r => ({ buf: bufs[r.file], start: r.start, thud: r.thud })),
+      };
+    } catch (err) {
+      failed = true;
+      console.warn('Typelight: sound samples could not be loaded. Serve the folder over http ' +
+        '(for example: python3 -m http.server) instead of opening the file directly.', err);
+    }
+  }
 
   function ensure() {
     if (!ctx) {
       const C = window.AudioContext || window.webkitAudioContext;
       if (!C) return null;
-      ctx = new C();
-      const n = ctx.sampleRate;
-      noise = ctx.createBuffer(1, n, n);
-      const d = noise.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14; comp.ratio.value = 4;
-      const out = ctx.createGain();
-      out.gain.value = .8;
-      out.connect(comp); comp.connect(ctx.destination);
-      // a few fixed positions across the stereo field; the strike follows the head
-      pans = [-.5, -.25, 0, .25, .5].map(v => {
-        if (!ctx.createStereoPanner) return out;
-        const p = ctx.createStereoPanner();
-        p.pan.value = v; p.connect(out);
-        return p;
-      });
+      ctx = new C({ latencyHint: 'interactive' });
+      // A plain gain and nothing else: a compressor or limiter here would delay
+      // every strike by its look-ahead, and lag is the one thing a key must not have.
+      out = ctx.createGain();
+      out.gain.value = .9;
+      out.connect(ctx.destination);
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
-  const ready = () => S.sound && ensure();
-  const bus = pan => pans[Math.max(0, Math.min(4, Math.round((pan + .5) * 4)))];
+  const ready = () => S.sound && bank && ensure();
 
-  function env(t, peak, decay) {
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(.0001, t);
-    g.gain.linearRampToValueAtTime(peak, t + .001);
-    g.gain.exponentialRampToValueAtTime(.0001, t + .001 + decay);
-    return g;
+  // A shuffled bag: every take is used once before any repeats.
+  function pick(kind) {
+    const list = bank[kind];
+    let bag = bags[kind];
+    if (!bag || !bag.length) {
+      bag = bags[kind] = list.map((_, i) => i);
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      const end = bag.length - 1;
+      if (end > 0 && bag[end] === lastOf[kind]) [bag[0], bag[end]] = [bag[end], bag[0]];
+    }
+    return list[lastOf[kind] = bag.pop()];
   }
-  function burst(dst, t, type, freq, q, peak, decay) {
+
+  function play(buf, { gain = 1, rate = 1, pan = 0, offset = 0, fade = 0, when = 0 } = {}) {
+    const t = ctx.currentTime + when;
     const src = ctx.createBufferSource();
-    src.buffer = noise;
-    const f = ctx.createBiquadFilter();
-    f.type = type; f.frequency.value = freq; f.Q.value = q;
-    const g = env(t, peak, decay);
-    src.connect(f); f.connect(g); g.connect(dst);
-    src.start(t, Math.random() * .8, decay + .03);
-  }
-  function tone(dst, t, f0, f1, peak, decay) {
-    const o = ctx.createOscillator();
-    o.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + decay);
-    const g = env(t, peak, decay);
-    o.connect(g); g.connect(dst);
-    o.start(t); o.stop(t + decay + .03);
-  }
-
-  function strike(b, t, v) {
-    burst(b, t, 'bandpass', rnd(2900, 3500), 1.4, .22 * v, .012);        // key lever
-    burst(b, t + .016, 'bandpass', rnd(1500, 1900), .9, .6 * v, .034);   // slug on the platen
-    burst(b, t + .016, 'highpass', 5200, .7, .16 * v, .018);
-    tone(b, t + .016, rnd(150, 175), 68, .5 * v, .06);                   // body of the machine
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    if (fade) {
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gain, t + fade);
+    } else g.gain.value = gain;
+    src.connect(g);
+    let last = g;
+    if (pan && ctx.createStereoPanner) {
+      last = ctx.createStereoPanner();
+      last.pan.value = pan;
+      g.connect(last);
+    }
+    last.connect(out);
+    src.onended = () => last.disconnect();
+    src.start(t, offset);
   }
 
   return {
-    ensure,
-    key(pan) {
+    load, ensure,
+    get failed() { return failed; },
+    // what the browser reports between "play" and the speaker, in ms (null if unknown)
+    get latency() {
+      if (!ctx) return null;
+      return Math.round(((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000);
+    },
+    key(pan, when = 0, force = 1) {
       if (!ready()) return;
-      strike(bus(pan), ctx.currentTime + .002, rnd(.85, 1.1));
+      play(pick('key'), { gain: LEVEL.key * force * rnd(.8, 1), rate: rnd(.97, 1.03), pan, when });
     },
     space(pan) {
       if (!ready()) return;
-      const t = ctx.currentTime + .002, b = bus(pan);
-      burst(b, t, 'lowpass', 900, .7, .34, .05);
-      tone(b, t, 125, 58, .45, .08);
+      play(pick('space'), { gain: LEVEL.space * rnd(.8, 1), rate: rnd(.94, 1.06), pan });
     },
+    // there is no recording of the backspace key; a lower, softer space bar stands in for it
     back(pan) {
       if (!ready()) return;
-      const t = ctx.currentTime + .002, b = bus(pan);
-      burst(b, t, 'bandpass', 1150, 1, .3, .03);
-      tone(b, t, 140, 80, .22, .05);
+      play(pick('space'), { gain: LEVEL.back * rnd(.85, 1), rate: rnd(.8, .88), pan });
     },
     flurry(pan) {
       if (!ready()) return;
-      const t = ctx.currentTime + .002, b = bus(pan);
-      for (let i = 0; i < 4; i++) strike(b, t + i * .05 + rnd(0, .012), rnd(.6, .85));
+      for (let i = 0; i < 4; i++) this.key(pan, i * .055 + rnd(0, .015), .8);
     },
-    // carriage return: a ratchet while the head travels, then it lands
-    ret(dur) {
+    // Carriage return. The recording is entered late for a short trip,
+    // so the carriage always lands on its stop when the head arrives.
+    ret(travel) {
       if (!ready()) return;
-      const t = ctx.currentTime + .025;
-      const n = Math.max(4, Math.round(dur / .024));
-      for (let i = 0; i < n; i++) {
-        const k = i / n;
-        burst(bus(.35 - k * .7), t + dur * Math.pow(k, 1.6), 'bandpass', rnd(2300, 2900), 2, .1, .007);
-      }
-      const b = bus(-.4);
-      tone(b, t + dur, 115, 52, .55, .13);
-      burst(b, t + dur, 'bandpass', 650, .8, .32, .07);
+      const r = pick('ret');
+      const offset = Math.max(0, r.thud - travel);
+      play(r.buf, { gain: LEVEL.ret * rnd(.85, 1), offset, fade: offset > r.start + .02 ? .015 : 0 });
     },
     bell() {
       if (!ready()) return;
-      const t = ctx.currentTime + .01, b = bus(.4);
-      tone(b, t, 2093, 2093, .16, 1.1);
-      tone(b, t, 5776, 5776, .05, .55);
-      tone(b, t, 11300, 11300, .015, .25);
-      burst(b, t, 'bandpass', 4200, 3, .08, .01);
+      play(pick('bell'), { gain: LEVEL.bell, pan: .25 });
     },
     tick() {
       if (!ready()) return;
       const now = performance.now();
-      if (now - lastTick < 38) return;
+      if (now - lastTick < 40) return;
       lastTick = now;
-      burst(bus(0), ctx.currentTime + .002, 'bandpass', rnd(2200, 2600), 2, .07, .006);
+      play(pick('feed'), { gain: LEVEL.feed * rnd(.7, 1), rate: rnd(.95, 1.08) });
     },
   };
 })();
 
-const panOf = col => (col / Math.max(1, S.cols) - .5) * .8;
+const panOf = col => (col / Math.max(1, S.cols) - .5) * .5;
 
 /* ------------------------------------------------------------------ *
  * Input. A hidden textarea owns the text (so dead keys, IME, paste and
@@ -560,6 +880,24 @@ const panOf = col => (col / Math.max(1, S.cols) - .5) * .8;
  * that can only type where the head is.
  * ------------------------------------------------------------------ */
 let composing = false;
+let struck = null;       // the sound already played on key down for the input that follows
+
+const returnTravel = cols => Math.max(.25, Math.min(1, cols / S.cols)) * RETURN_SWEEP;
+
+// Sound goes out the moment the key goes down. Waiting for the input event would put
+// the browser's text handling and our own layout between the finger and the strike.
+function strikeOnKeyDown(e) {
+  const k = e.key;
+  if (e.isComposing || e.keyCode === 229 || k === 'Dead' || k === 'Process') return;   // dead keys, IME
+  if (e.metaKey || e.ctrlKey) return;                                                  // shortcuts, AltGr
+  const pan = panOf(S.col);
+  let kind = null;
+  if (k === 'Backspace') { if (ta.value.length) { snd.back(pan); kind = 'back'; } }
+  else if (k === 'Enter') { snd.ret(returnTravel(S.col)); kind = 'ret'; }
+  else if (k === ' ') { snd.space(pan); kind = 'key'; }
+  else if (k.length === 1) { snd.key(pan); kind = 'key'; }
+  if (kind) struck = { kind, at: performance.now() };
+}
 
 function onInput() {
   let v = ta.value;
@@ -578,32 +916,40 @@ function onInput() {
   const del = old.length - p, add = v.slice(p);
   const lastCh = add ? add[add.length - 1] : '';
   const pr = S.row, pc = S.col;
+  const pre = struck && performance.now() - struck.at < 100 ? struck.kind : null;
+  struck = null;
 
   S.text = v;
   S.fresh = add.length === 1 && add !== ' ' && add !== '\n' ? v.length - 1 : -1;
   layout(p);
 
   const dRow = S.row - pr;
-  let move = 70, feed = 150;
-  if (dRow !== 0) move = Math.min(520, 170 + Math.abs(S.col - pc) * 6);
+  let move = 70, feed = 150, ease = EASE_STEP;
+  if (dRow > 0) {             // carriage return: as long as the real one takes for this distance
+    move = Math.round(returnTravel(Math.abs(S.col - pc)) * 1000);
+    ease = EASE_RETURN;
+  } else if (dRow < 0) move = Math.min(420, 150 + Math.abs(S.col - pc) * 5);
   if (S.scroll > 0) {                       // typing rolls the paper back to the line
     if (S.scroll < S.vh) { S.snapFrom = S.scroll; feed = 280; } else feed = 0;
     S.scroll = 0;
   }
+  const travel = move / 1000;
   if (reduce) { move = 0; feed = 0; }
-  place(move, feed);
+  place(move, feed, ease);
   renderLines();
   S.snapFrom = 0;
 
   if (!composing) {
+    // Whatever was not already struck on key down: paste, mobile keyboards, undo, word wrap.
     const pan = panOf(S.col);
-    if (add.length > 8) snd.flurry(pan);
+    if (pre) { /* already heard */ }
+    else if (add.length > 8) snd.flurry(pan);
     else if (add) {
       if (lastCh === ' ') snd.space(pan);
       else if (lastCh !== '\n') snd.key(pan);
     } else if (del) snd.back(pan);
 
-    if (dRow > 0) snd.ret(move / 1000);
+    if (dRow > 0 && pre !== 'ret') snd.ret(travel);
     else if (dRow < 0) snd.tick();
     else if (add) {
       const bellCol = S.cols - BELL_BEFORE;
@@ -615,6 +961,7 @@ function onInput() {
 }
 
 function thud() {
+  light.strike();
   if (reduce || !kick.animate) return;
   kick.animate(
     [{ transform: 'translateY(0)' }, { transform: 'translateY(1.5px)', offset: .3 }, { transform: 'translateY(0)' }],
@@ -672,6 +1019,7 @@ ta.addEventListener('keydown', e => {
     case 'Escape':    setScroll(0, 260); break;
     case 'ArrowLeft': case 'ArrowRight': case 'Home': case 'End': e.preventDefault(); break;
     case 'Tab':       e.preventDefault(); insert('    '); break;
+    default:          strikeOnKeyDown(e);
   }
 });
 
@@ -704,7 +1052,7 @@ room.addEventListener('touchend', () => { touchY = null; });
  * Controls, saving
  * ------------------------------------------------------------------ */
 function words(n) {
-  return n + ' ' + (n === 1 ? 'slovo' : n >= 2 && n <= 4 ? 'slova' : 'slov');
+  return n + (n === 1 ? ' word' : ' words');
 }
 function persist() {
   store.set(TEXT_KEY, S.text);
@@ -722,8 +1070,21 @@ function wake() { hud.classList.remove('quiet'); }
 function savePrefs() { store.set(PREF_KEY, JSON.stringify({ sound: S.sound, lamp: S.lamp })); }
 function paintPrefs() {
   root.style.setProperty('--lamp', LAMPS[S.lamp]);
-  $('bLamp').textContent = 'Lampa: ' + LAMP_NAMES[S.lamp];
-  $('bSound').textContent = 'Zvuk: ' + (S.sound ? 'zapnutý' : 'vypnutý');
+  light.wake();
+  $('bLamp').textContent = 'Lamp: ' + LAMP_NAMES[S.lamp];
+  const bs = $('bSound');
+  bs.textContent = 'Sound: ' + (snd.failed ? 'unavailable' : S.sound ? 'on' : 'off');
+  bs.title = soundTitle();
+}
+
+function soundTitle() {
+  if (snd.failed) {
+    return 'The sounds could not be loaded. Open the app over http (for example with python3 -m http.server), not straight from the file.';
+  }
+  const ms = snd.latency;
+  if (ms === null) return 'Typewriter sounds';
+  return 'Typewriter sounds. Audio output delay reported by the browser: ' + ms + ' ms' +
+    (ms > 80 ? '. That is a lot; Bluetooth headphones or speakers are the usual cause.' : '.');
 }
 
 function saveFile() {
@@ -745,9 +1106,10 @@ $('bSound').addEventListener('click', () => {
   S.sound = !S.sound; paintPrefs(); savePrefs();
   if (S.sound) snd.key(0);
 });
+$('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = soundTitle(); });
 $('bSave').addEventListener('click', saveFile);
 $('bNew').addEventListener('click', () => {
-  if (S.text && !confirm('Začít na čistém listu? Současný text se smaže – pokud ho chceš, nejdřív ho ulož.')) return;
+  if (S.text && !confirm('Start a new sheet? This deletes the current text. Save it first if you want to keep it.')) return;
   ta.value = '';
   onInput();
   persist();
@@ -769,8 +1131,11 @@ try {
 } catch { /* defaults */ }
 paintPrefs();
 
+snd.load().then(paintPrefs);
+
 S.text = store.get(TEXT_KEY) || '';
 ta.value = S.text;
+light.init();
 measure();
 persist();
 ta.focus({ preventScroll: true });
