@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#14110f">
+<meta name="color-scheme" content="dark">
+<title>Typelight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* materials */
+    --paper: #f5eddb;
+    --ink: #1c1713;
+    --desk: #5a4739;
+    --brass: #e3b76b;
+    /* light */
+    --ambient: #403e45;      /* cool dusk that everything sits in */
+    --lamp: 1;               /* lamp level, 0–1 */
+    /* geometry, set from JS */
+    --fs: clamp(17px, 0.5vw + 13px, 21px);
+    --chw: 11px;
+    --lh: 32px;
+    --ly: 50vh;
+    --R: 600px;
+    --move: 70ms;
+    --feed: 150ms;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: #14110f; overflow: hidden; }
+  body { position: fixed; inset: 0; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+
+  .room {
+    position: absolute; left: 0; top: 0; width: 100%;
+    height: var(--vh, 100dvh);
+    overflow: hidden;
+    background-color: var(--desk);
+    font: 400 var(--fs)/var(--lh) "Courier Prime", "Courier New", Courier, monospace;
+    font-variant-ligatures: none;
+    cursor: text;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  /* ---------- paper ---------- */
+  .stage { position: absolute; top: 0; bottom: 0; z-index: 1; }
+
+  .sheet {
+    position: absolute; left: 0; right: 0; top: 0;
+    height: calc(100% + 80px);
+    background-color: var(--paper);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .25 0 0 0 0 .16 0 0 0 .34 -.07'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+    border-radius: 3px 3px 0 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.14), 0 26px 70px rgba(0,0,0,.6);
+    will-change: transform;
+    transition: transform var(--feed) ease-out, background-position var(--feed) ease-out;
+  }
+
+  .lines {
+    position: absolute; top: 0; width: 0; height: 0;
+    will-change: transform;
+    transition: transform var(--feed) ease-out;
+  }
+  .ln {
+    position: absolute; left: 0;
+    height: var(--lh); line-height: var(--lh);
+    white-space: pre;
+    color: var(--ink);
+    text-shadow: 0 0 .5px rgba(28,23,19,.55);   /* a little ink spread */
+  }
+  .c { display: inline-block; width: var(--chw); text-align: center; }
+  .c.hv { text-shadow: 0 0 .8px rgba(28,23,19,.85); }  /* a harder strike */
+  .c.fr { animation: strike 110ms ease-out; }
+  @keyframes strike { from { opacity: 0; filter: blur(1.4px); } }
+  .ghost { opacity: .42; font-style: italic; }
+
+  /* the rail the head rides on */
+  .rail {
+    position: absolute; left: -56px; right: -56px;
+    top: calc(var(--ly) + var(--lh) + 12px);
+    height: 6px; border-radius: 3px;
+    background: linear-gradient(#a7a199, #6d6862 45%, #2f2c29);
+    box-shadow: 0 5px 9px rgba(0,0,0,.42);
+  }
+  .rail::before, .rail::after {
+    content: ""; position: absolute; top: -5px; width: 9px; height: 16px; border-radius: 2px;
+    background: linear-gradient(#8f8a83, #3a3633);
+  }
+  .rail::before { left: 0; }
+  .rail::after { right: 0; }
+
+  /* ---------- light ---------- */
+  /* An isolated group: dusk as the base, the lamp added on top of it,
+     and the whole thing multiplied over paper, ink, rail and desk. */
+  .light {
+    position: absolute; inset: 0; z-index: 2;
+    background: var(--ambient);
+    mix-blend-mode: multiply;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .beam {
+    position: absolute; left: 0; top: 0;
+    width: calc(var(--R) * 2); height: calc(var(--R) * 1.44);
+    margin: calc(var(--R) * -.72) 0 0 calc(var(--R) * -1);
+    background:
+      radial-gradient(ellipse calc(var(--lh) * 8) calc(var(--lh) * 5) at 50% calc(50% + var(--lh) * 2.7),
+        rgba(255,238,206,.9), rgba(255,230,190,.36) 45%, rgba(255,224,176,0)),
+      radial-gradient(closest-side,
+        rgb(250,212,160) 0%, rgb(200,163,117) 15%, rgb(132,102,68) 30%,
+        rgb(80,60,38) 45%, rgb(45,33,20) 60%, rgb(21,15,9) 75%, rgb(7,5,3) 90%, #000 100%);
+    mix-blend-mode: screen;
+    opacity: var(--lamp);
+    will-change: transform;
+    transition: transform var(--move) cubic-bezier(.2,.7,.2,1), opacity .5s ease;
+    animation: warm-up 1.5s ease-out backwards;
+  }
+  @keyframes warm-up {
+    0%   { opacity: 0; }
+    18%  { opacity: calc(var(--lamp) * .45); }
+    30%  { opacity: calc(var(--lamp) * .2); }
+    100% { opacity: var(--lamp); }
+  }
+
+  /* ---------- the head ---------- */
+  .head {
+    position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 3;
+    pointer-events: none;
+    will-change: transform;
+    transition: transform var(--move) cubic-bezier(.2,.7,.2,1);
+  }
+  .head i { position: absolute; display: block; }
+  .kick { position: absolute; left: 0; top: 0; }
+  .haze {
+    left: calc(var(--chw) / 2 - 180px); top: calc(var(--lh) - 150px);
+    width: 360px; height: 260px;
+    background: radial-gradient(closest-side, rgba(255,196,125,.12), rgba(255,196,125,0));
+    opacity: var(--lamp);
+  }
+  .caret {
+    left: 0; top: calc(var(--lh) - 7px);
+    width: var(--chw); height: 2px; border-radius: 1px;
+    background: var(--brass);
+    box-shadow: 0 0 7px rgba(255,190,110,.55);
+  }
+  .block {
+    left: calc(var(--chw) / 2 - 37px); top: calc(var(--lh) + 4px);
+    width: 74px; height: 24px; border-radius: 5px 5px 8px 8px;
+    background: linear-gradient(#3b3733, #1b1918 70%);
+    border-top: 1px solid rgba(255,214,160,.42);
+    box-shadow: 0 7px 14px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.05);
+  }
+  .block::after {   /* index mark */
+    content: ""; position: absolute; left: 50%; top: 9px; width: 1px; height: 9px;
+    background: rgba(255,230,190,.22);
+  }
+  .bulb {
+    left: calc(var(--chw) / 2 - 5px); top: calc(var(--lh) + 1px);
+    width: 10px; height: 4px; border-radius: 4px 4px 1px 1px;
+    background: #fff4dc;
+    box-shadow:
+      0 0 6px 1px rgba(255,216,152,.95),
+      0 -2px 18px 4px rgba(255,180,95,.5),
+      0 -6px 46px 12px rgba(255,160,70,.2);
+    opacity: calc(.45 + var(--lamp) * .55);
+    animation: bulb-on 1.5s ease-out backwards;
+  }
+  @keyframes bulb-on { 0% { opacity: 0; } 18% { opacity: .6; } 30% { opacity: .25; } }
+
+  /* ---------- input ---------- */
+  #ta {
+    position: absolute; left: 0; top: 0; z-index: 0;
+    width: 12px; height: var(--lh);
+    margin: 0; padding: 0; border: 0; outline: 0; resize: none;
+    background: transparent; color: transparent; caret-color: transparent;
+    font: 16px/1 monospace;       /* 16px keeps iOS from zooming on focus */
+    white-space: pre; overflow: hidden;
+    opacity: 0; pointer-events: none;
+  }
+
+  /* ---------- quiet controls ---------- */
+  .hud {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    font-size: 13px; line-height: 1;
+    color: rgba(236,214,178,.46);
+    cursor: default;
+    transition: opacity .7s ease;
+  }
+  .hud.quiet { opacity: 0; pointer-events: none; }
+  .hud .count { padding: 8px 10px; white-space: nowrap; }
+  .hud nav { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+  .hud button {
+    all: unset; cursor: pointer; padding: 8px 10px; border-radius: 4px; white-space: nowrap;
+    transition: color .2s ease;
+  }
+  .hud button:hover { color: rgba(255,232,196,.95); }
+  .hud button:focus-visible { outline: 1px solid rgba(255,214,160,.7); outline-offset: -1px; }
+
+  .probe { position: absolute; left: -999px; top: 0; visibility: hidden; white-space: pre; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .beam, .bulb, .c.fr { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="room" id="room">
+  <div class="stage" id="stage">
+    <div class="sheet" id="sheet"></div>
+    <div class="lines" id="lines" aria-hidden="true"></div>
+    <div class="rail"></div>
+  </div>
+
+  <div class="light"><div class="beam" id="beam"></div></div>
+
+  <div class="head" id="head" aria-hidden="true">
+    <div class="kick" id="kick">
+      <i class="haze"></i>
+      <i class="caret"></i>
+      <i class="block"></i>
+      <i class="bulb" id="bulb"></i>
+    </div>
+  </div>
+
+  <textarea id="ta" aria-label="Text" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"></textarea>
+
+  <footer class="hud" id="hud">
+    <span class="count" id="count">0 slov</span>
+    <nav>
+      <button type="button" id="bLamp" title="Jas lampy"></button>
+      <button type="button" id="bSound" title="Zvuky stroje"></button>
+      <button type="button" id="bSave" title="Stáhnout text jako soubor (⌘S / Ctrl+S)">Uložit .txt</button>
+      <button type="button" id="bNew" title="Smazat text a začít na čistém listu">Nový list</button>
+    </nav>
+  </footer>
+
+  <span class="probe" id="probe">00000000000000000000</span>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const $ = id => document.getElementById(id);
+const root = document.documentElement;
+const room = $('room'), stage = $('stage'), sheet = $('sheet'), linesEl = $('lines');
+const beam = $('beam'), head = $('head'), kick = $('kick'), bulb = $('bulb');
+const ta = $('ta'), hud = $('hud'), probe = $('probe'), countEl = $('count');
+
+const TEXT_KEY = 'typelight.text', PREF_KEY = 'typelight.prefs';
+const TOP_ROWS = 3;        // blank lines above the first line of the sheet
+const EDGE = 80;           // how far the sheet's top edge may leave the screen
+const BELL_BEFORE = 8;     // the bell rings this many columns before the margin
+const LAMPS = [.5, .76, 1];
+const LAMP_NAMES = ['tlumená', 'střední', 'naplno'];
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const S = {
+  text: '', lines: [{ s: 0, e: 0 }], row: 0, col: 0,
+  scroll: 0, snapFrom: 0,          // how far the paper is rolled back, px
+  cols: 0, margin: 6, chw: 0, lh: 0, ly: 0, vw: 0, vh: 0, left: 0,
+  sound: true, lamp: 2, fresh: -1,
+};
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: keep going unsaved */ } },
+};
+
+/* ------------------------------------------------------------------ *
+ * Layout: greedy word wrap on a fixed character grid.
+ * A line is {s, e}: a slice of the text. The space or newline that
+ * ends a line belongs to no line.
+ * ------------------------------------------------------------------ */
+function wrapPara(t, s, e, cols, push) {
+  let ls = s, sp = -1;
+  for (let i = s; i < e; i++) {
+    const isSp = t.charCodeAt(i) === 32;
+    if (i - ls >= cols) {
+      if (isSp) { push(ls, i); ls = i + 1; sp = -1; continue; }
+      if (sp >= ls) { push(ls, sp); ls = sp + 1; sp = -1; }
+      else { push(ls, i); ls = i; }            // one word longer than the line
+    }
+    if (isSp) sp = i;
+  }
+  push(ls, e);
+}
+
+// Re-lay out from the paragraph containing text index p (everything before p is unchanged).
+function layout(p) {
+  const t = S.text, lines = S.lines;
+  const ps = p <= 0 ? 0 : t.lastIndexOf('\n', p - 1) + 1;
+  let k = lines.length;
+  while (k > 0 && lines[k - 1].s >= ps) k--;
+  const tail = lines.splice(k);
+  let j = 0;
+  // Keep the old line object when its content is untouched, so its DOM is not rebuilt.
+  const push = (s, e) => {
+    const o = tail[j++];
+    lines.push(o && o.s === s && o.e === e && e <= p ? o : { s, e });
+  };
+  let i = ps;
+  for (;;) {
+    let e = t.indexOf('\n', i);
+    const last = e === -1;
+    if (last) e = t.length;
+    wrapPara(t, i, e, S.cols, push);
+    if (last) break;
+    i = e + 1;
+  }
+  S.row = lines.length - 1;
+  S.col = t.length - lines[S.row].s;
+}
+
+/* ------------------------------------------------------------------ *
+ * Rendering: only the lines near the viewport exist in the DOM.
+ * Every character gets a small, stable imperfection.
+ * ------------------------------------------------------------------ */
+function hash(i, salt) {
+  let x = Math.imul(i + 1, 0x9E3779B1) ^ Math.imul(salt + 7, 0x85EBCA6B);
+  x ^= x >>> 15; x = Math.imul(x, 0x2C1B3C6D);
+  x ^= x >>> 12; x = Math.imul(x, 0x297A2D39);
+  x ^= x >>> 15;
+  return (x >>> 0) / 4294967296;
+}
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+
+function lineHTML(s, e) {
+  let out = '', i = s;
+  for (const ch of S.text.slice(s, e)) {
+    if (ch === ' ') { out += ' '; i++; continue; }
+    const dy = ((hash(i, 1) - .5) * 1.3).toFixed(2);
+    const rot = ((hash(i, 2) - .5) * 1.4).toFixed(2);
+    const c = hash(i, 3);
+    const op = (.74 + c * .26).toFixed(2);
+    out += '<span class="c' + (c > .93 ? ' hv' : '') + (i === S.fresh ? ' fr' : '') +
+      '" style="transform:translateY(' + dy + 'px) rotate(' + rot + 'deg);opacity:' + op + '">' +
+      (ESC[ch] || ch) + '</span>';
+    i += ch.length;
+  }
+  return out;
+}
+
+const els = new Map();   // row -> element
+
+function renderLines() {
+  const { row, lh, ly, vh, lines } = S;
+  const hi = Math.max(S.scroll, S.snapFrom), lo = Math.min(S.scroll, S.snapFrom);
+  const rMin = Math.max(0, row - Math.ceil((ly + hi) / lh) - 4);
+  const rMax = Math.min(lines.length - 1, row + Math.ceil((vh - ly - lo) / lh) + 4);
+
+  for (const [r, el] of els) {
+    if (r < rMin || r > rMax) { el.remove(); els.delete(r); }
+  }
+  for (let r = rMin; r <= rMax; r++) {
+    const ln = lines[r];
+    let el = els.get(r);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'ln';
+      el.style.top = r * lh + 'px';
+      linesEl.appendChild(el);
+      els.set(r, el);
+    }
+    if (el._ln !== ln) {
+      el._ln = ln;
+      el.innerHTML = S.text.length === 0
+        ? '<span class="ghost">Začni psát…</span>'
+        : lineHTML(ln.s, ln.e);
+    }
+  }
+}
+
+function place(moveMs, feedMs) {
+  root.style.setProperty('--move', moveMs + 'ms');
+  root.style.setProperty('--feed', feedMs + 'ms');
+  const { lh, ly, row, col, chw } = S;
+  const y = ly - row * lh + S.scroll;
+  linesEl.style.transform = `translate3d(0,${y}px,0)`;
+
+  // The sheet is one screen tall and stops just above the viewport;
+  // past that point only its grain keeps travelling.
+  const top = y - TOP_ROWS * lh, sy = Math.max(top, -EDGE);
+  sheet.style.transform = `translate3d(0,${sy}px,0)`;
+  sheet.style.backgroundPosition = `0 ${top - sy}px`;
+
+  const hx = S.left + (S.margin + col) * chw;
+  head.style.transform = `translate3d(${hx}px,${ly}px,0)`;
+  beam.style.transform = `translate3d(${hx + chw / 2}px,${ly - lh * 2.2}px,0)`;
+  ta.style.transform = `translate3d(${Math.max(0, Math.min(hx, S.vw - 24))}px,${ly}px,0)`;
+}
+
+function measure() {
+  const vv = window.visualViewport;
+  S.vw = window.innerWidth;
+  S.vh = Math.round(vv ? vv.height : window.innerHeight);
+  root.style.setProperty('--vh', S.vh + 'px');
+
+  const chw = probe.getBoundingClientRect().width / 20;
+  const lh = Math.round(parseFloat(getComputedStyle(probe).fontSize) * 1.72);
+  const margin = S.vw < 520 ? 2 : S.vw < 900 ? 4 : 7;
+  const cols = Math.max(16, Math.min(62, Math.floor((S.vw - 16) / chw) - 2 * margin));
+  const changed = cols !== S.cols || lh !== S.lh || Math.abs(chw - S.chw) > .01;
+  Object.assign(S, { chw, lh, margin, cols });
+  S.ly = Math.round(S.vh * .5);
+
+  const W = Math.round((cols + 2 * margin) * chw);
+  S.left = Math.round((S.vw - W) / 2);
+  stage.style.left = S.left + 'px';
+  stage.style.width = W + 'px';
+  linesEl.style.left = margin * chw + 'px';
+  root.style.setProperty('--chw', chw + 'px');
+  root.style.setProperty('--lh', lh + 'px');
+  root.style.setProperty('--ly', S.ly + 'px');
+  root.style.setProperty('--R', Math.round(Math.min(27 * lh, S.vw * .8)) + 'px');
+
+  if (changed) {
+    for (const el of els.values()) el.remove();
+    els.clear();
+    S.lines = [{ s: 0, e: 0 }];
+    layout(0);
+  }
+  S.scroll = Math.max(0, Math.min(S.row * S.lh, S.scroll));
+  S.snapFrom = S.scroll;
+  place(0, 0);
+  renderLines();
+}
+
+/* ------------------------------------------------------------------ *
+ * Sound: everything is synthesised, there are no audio files.
+ * ------------------------------------------------------------------ */
+const snd = (() => {
+  let ctx = null, noise = null, pans = null, lastTick = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  function ensure() {
+    if (!ctx) {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return null;
+      ctx = new C();
+      const n = ctx.sampleRate;
+      noise = ctx.createBuffer(1, n, n);
+      const d = noise.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.ratio.value = 4;
+      const out = ctx.createGain();
+      out.gain.value = .8;
+      out.connect(comp); comp.connect(ctx.destination);
+      // a few fixed positions across the stereo field; the strike follows the head
+      pans = [-.5, -.25, 0, .25, .5].map(v => {
+        if (!ctx.createStereoPanner) return out;
+        const p = ctx.createStereoPanner();
+        p.pan.value = v; p.connect(out);
+        return p;
+      });
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  const ready = () => S.sound && ensure();
+  const bus = pan => pans[Math.max(0, Math.min(4, Math.round((pan + .5) * 4)))];
+
+  function env(t, peak, decay) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + .001);
+    g.gain.exponentialRampToValueAtTime(.0001, t + .001 + decay);
+    return g;
+  }
+  function burst(dst, t, type, freq, q, peak, decay) {
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const f = ctx.createBiquadFilter();
+    f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = env(t, peak, decay);
+    src.connect(f); f.connect(g); g.connect(dst);
+    src.start(t, Math.random() * .8, decay + .03);
+  }
+  function tone(dst, t, f0, f1, peak, decay) {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + decay);
+    const g = env(t, peak, decay);
+    o.connect(g); g.connect(dst);
+    o.start(t); o.stop(t + decay + .03);
+  }
+
+  function strike(b, t, v) {
+    burst(b, t, 'bandpass', rnd(2900, 3500), 1.4, .22 * v, .012);        // key lever
+    burst(b, t + .016, 'bandpass', rnd(1500, 1900), .9, .6 * v, .034);   // slug on the platen
+    burst(b, t + .016, 'highpass', 5200, .7, .16 * v, .018);
+    tone(b, t + .016, rnd(150, 175), 68, .5 * v, .06);                   // body of the machine
+  }
+
+  return {
+    ensure,
+    key(pan) {
+      if (!ready()) return;
+      strike(bus(pan), ctx.currentTime + .002, rnd(.85, 1.1));
+    },
+    space(pan) {
+      if (!ready()) return;
+      const t = ctx.currentTime + .002, b = bus(pan);
+      burst(b, t, 'lowpass', 900, .7, .34, .05);
+      tone(b, t, 125, 58, .45, .08);
+    },
+    back(pan) {
+      if (!ready()) return;
+      const t = ctx.currentTime + .002, b = bus(pan);
+      burst(b, t, 'bandpass', 1150, 1, .3, .03);
+      tone(b, t, 140, 80, .22, .05);
+    },
+    flurry(pan) {
+      if (!ready()) return;
+      const t = ctx.currentTime + .002, b = bus(pan);
+      for (let i = 0; i < 4; i++) strike(b, t + i * .05 + rnd(0, .012), rnd(.6, .85));
+    },
+    // carriage return: a ratchet while the head travels, then it lands
+    ret(dur) {
+      if (!ready()) return;
+      const t = ctx.currentTime + .025;
+      const n = Math.max(4, Math.round(dur / .024));
+      for (let i = 0; i < n; i++) {
+        const k = i / n;
+        burst(bus(.35 - k * .7), t + dur * Math.pow(k, 1.6), 'bandpass', rnd(2300, 2900), 2, .1, .007);
+      }
+      const b = bus(-.4);
+      tone(b, t + dur, 115, 52, .55, .13);
+      burst(b, t + dur, 'bandpass', 650, .8, .32, .07);
+    },
+    bell() {
+      if (!ready()) return;
+      const t = ctx.currentTime + .01, b = bus(.4);
+      tone(b, t, 2093, 2093, .16, 1.1);
+      tone(b, t, 5776, 5776, .05, .55);
+      tone(b, t, 11300, 11300, .015, .25);
+      burst(b, t, 'bandpass', 4200, 3, .08, .01);
+    },
+    tick() {
+      if (!ready()) return;
+      const now = performance.now();
+      if (now - lastTick < 38) return;
+      lastTick = now;
+      burst(bus(0), ctx.currentTime + .002, 'bandpass', rnd(2200, 2600), 2, .07, .006);
+    },
+  };
+})();
+
+const panOf = col => (col / Math.max(1, S.cols) - .5) * .8;
+
+/* ------------------------------------------------------------------ *
+ * Input. A hidden textarea owns the text (so dead keys, IME, paste and
+ * undo behave natively); the caret is pinned to the end, like a machine
+ * that can only type where the head is.
+ * ------------------------------------------------------------------ */
+let composing = false;
+
+function onInput() {
+  let v = ta.value;
+  if (v.indexOf('\t') !== -1) { v = v.replace(/\t/g, '    '); ta.value = v; }
+  const old = S.text;
+  if (v === old) return;
+
+  let p;
+  if (v.length >= old.length && v.startsWith(old)) p = old.length;
+  else if (old.startsWith(v)) p = v.length;
+  else {
+    p = 0;
+    const n = Math.min(old.length, v.length);
+    while (p < n && old.charCodeAt(p) === v.charCodeAt(p)) p++;
+  }
+  const del = old.length - p, add = v.slice(p);
+  const lastCh = add ? add[add.length - 1] : '';
+  const pr = S.row, pc = S.col;
+
+  S.text = v;
+  S.fresh = add.length === 1 && add !== ' ' && add !== '\n' ? v.length - 1 : -1;
+  layout(p);
+
+  const dRow = S.row - pr;
+  let move = 70, feed = 150;
+  if (dRow !== 0) move = Math.min(520, 170 + Math.abs(S.col - pc) * 6);
+  if (S.scroll > 0) {                       // typing rolls the paper back to the line
+    if (S.scroll < S.vh) { S.snapFrom = S.scroll; feed = 280; } else feed = 0;
+    S.scroll = 0;
+  }
+  if (reduce) { move = 0; feed = 0; }
+  place(move, feed);
+  renderLines();
+  S.snapFrom = 0;
+
+  if (!composing) {
+    const pan = panOf(S.col);
+    if (add.length > 8) snd.flurry(pan);
+    else if (add) {
+      if (lastCh === ' ') snd.space(pan);
+      else if (lastCh !== '\n') snd.key(pan);
+    } else if (del) snd.back(pan);
+
+    if (dRow > 0) snd.ret(move / 1000);
+    else if (dRow < 0) snd.tick();
+    else if (add) {
+      const bellCol = S.cols - BELL_BEFORE;
+      if (pc < bellCol && S.col >= bellCol) snd.bell();
+    }
+    if (add && lastCh !== '\n') thud();
+  }
+  touched();
+}
+
+function thud() {
+  if (reduce || !kick.animate) return;
+  kick.animate(
+    [{ transform: 'translateY(0)' }, { transform: 'translateY(1.5px)', offset: .3 }, { transform: 'translateY(0)' }],
+    { duration: 90 });
+  bulb.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(.82)', offset: .3 }, { filter: 'brightness(1)' }],
+    { duration: 120 });
+}
+
+function insert(str) {
+  ta.focus({ preventScroll: true });
+  let done = false;
+  try { done = document.execCommand('insertText', false, str); } catch { /* fall through */ }
+  if (!done) ta.value += str;
+  onInput();
+}
+
+function pinCaret() {
+  const n = ta.value.length;
+  if (ta.selectionStart !== n || ta.selectionEnd !== n) ta.setSelectionRange(n, n);
+}
+
+function setScroll(v, feedMs = 0) {
+  v = Math.max(0, Math.min(S.row * S.lh, v));
+  if (v === S.scroll) return;
+  const a = Math.floor(S.scroll / S.lh), b = Math.floor(v / S.lh);
+  S.snapFrom = feedMs ? S.scroll : v;
+  S.scroll = v;
+  place(0, reduce ? 0 : feedMs);
+  renderLines();
+  S.snapFrom = v;
+  if (a !== b) snd.tick();
+}
+
+ta.addEventListener('input', onInput);
+ta.addEventListener('compositionstart', () => { composing = true; });
+ta.addEventListener('compositionend', () => {
+  composing = false;
+  onInput();
+  snd.key(panOf(S.col));
+  thud();
+});
+ta.addEventListener('select', pinCaret);
+ta.addEventListener('focus', pinCaret);
+
+ta.addEventListener('keydown', e => {
+  snd.ensure();
+  const k = e.key, mod = e.metaKey || e.ctrlKey;
+  if (mod && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
+  if (mod && (k === 'a' || k === 'A')) { e.preventDefault(); return; }
+  switch (k) {
+    case 'ArrowUp':   e.preventDefault(); setScroll(S.scroll + S.lh, 110); break;
+    case 'ArrowDown': e.preventDefault(); setScroll(S.scroll - S.lh, 110); break;
+    case 'PageUp':    e.preventDefault(); setScroll(S.scroll + Math.round(S.vh * .6 / S.lh) * S.lh, 260); break;
+    case 'PageDown':  e.preventDefault(); setScroll(S.scroll - Math.round(S.vh * .6 / S.lh) * S.lh, 260); break;
+    case 'Escape':    setScroll(0, 260); break;
+    case 'ArrowLeft': case 'ArrowRight': case 'Home': case 'End': e.preventDefault(); break;
+    case 'Tab':       e.preventDefault(); insert('    '); break;
+  }
+});
+
+// keep the machine under the fingers
+document.addEventListener('keydown', () => {
+  if (document.activeElement !== ta) ta.focus({ preventScroll: true });
+}, true);
+room.addEventListener('pointerup', e => {
+  snd.ensure();
+  if (!e.target.closest('button')) ta.focus({ preventScroll: true });
+});
+
+// rolling the paper back to reread
+room.addEventListener('wheel', e => {
+  e.preventDefault();
+  setScroll(S.scroll - e.deltaY * (e.deltaMode === 1 ? S.lh : 1));
+}, { passive: false });
+let touchY = null;
+room.addEventListener('touchstart', e => { touchY = e.touches[0].clientY; wake(); }, { passive: true });
+room.addEventListener('touchmove', e => {
+  if (touchY === null) return;
+  const y = e.touches[0].clientY;
+  setScroll(S.scroll + (y - touchY));
+  touchY = y;
+  e.preventDefault();
+}, { passive: false });
+room.addEventListener('touchend', () => { touchY = null; });
+
+/* ------------------------------------------------------------------ *
+ * Controls, saving
+ * ------------------------------------------------------------------ */
+function words(n) {
+  return n + ' ' + (n === 1 ? 'slovo' : n >= 2 && n <= 4 ? 'slova' : 'slov');
+}
+function persist() {
+  store.set(TEXT_KEY, S.text);
+  const m = S.text.match(/\S+/g);
+  countEl.textContent = words(m ? m.length : 0);
+}
+let saveTimer = 0;
+function touched() {
+  hud.classList.add('quiet');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 350);
+}
+function wake() { hud.classList.remove('quiet'); }
+
+function savePrefs() { store.set(PREF_KEY, JSON.stringify({ sound: S.sound, lamp: S.lamp })); }
+function paintPrefs() {
+  root.style.setProperty('--lamp', LAMPS[S.lamp]);
+  $('bLamp').textContent = 'Lampa: ' + LAMP_NAMES[S.lamp];
+  $('bSound').textContent = 'Zvuk: ' + (S.sound ? 'zapnutý' : 'vypnutý');
+}
+
+function saveFile() {
+  persist();
+  const d = new Date(), pad = n => String(n).padStart(2, '0');
+  const name = `typelight-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.txt`;
+  const url = URL.createObjectURL(new Blob([S.text], { type: 'text/plain;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+for (const b of hud.querySelectorAll('button')) {
+  b.addEventListener('pointerdown', e => e.preventDefault());   // typing focus stays on the paper
+}
+$('bLamp').addEventListener('click', () => { S.lamp = (S.lamp + 1) % LAMPS.length; paintPrefs(); savePrefs(); });
+$('bSound').addEventListener('click', () => {
+  S.sound = !S.sound; paintPrefs(); savePrefs();
+  if (S.sound) snd.key(0);
+});
+$('bSave').addEventListener('click', saveFile);
+$('bNew').addEventListener('click', () => {
+  if (S.text && !confirm('Začít na čistém listu? Současný text se smaže – pokud ho chceš, nejdřív ho ulož.')) return;
+  ta.value = '';
+  onInput();
+  persist();
+  wake();
+  ta.focus({ preventScroll: true });
+});
+
+room.addEventListener('pointermove', wake);
+window.addEventListener('pagehide', persist);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
+
+/* ------------------------------------------------------------------ *
+ * Start
+ * ------------------------------------------------------------------ */
+try {
+  const p = JSON.parse(store.get(PREF_KEY) || '{}');
+  if (typeof p.sound === 'boolean') S.sound = p.sound;
+  if (Number.isInteger(p.lamp) && p.lamp >= 0 && p.lamp < LAMPS.length) S.lamp = p.lamp;
+} catch { /* defaults */ }
+paintPrefs();
+
+S.text = store.get(TEXT_KEY) || '';
+ta.value = S.text;
+measure();
+persist();
+ta.focus({ preventScroll: true });
+pinCaret();
+
+window.addEventListener('resize', measure);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', measure);
+if (document.fonts) {
+  document.fonts.load('19px "Courier Prime"').then(measure, () => {});
+  document.fonts.ready.then(measure);
+}
+})();
+</script>
+</body>
+</html>
