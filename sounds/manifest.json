@@ -1,5 +1,5 @@
 {
-  "version": "07949242a9",
+  "version": "1051e8668f",
   "key": [
     "key-01.flac",
     "key-02.flac",
@@ -48,5 +48,22 @@
     "feed-01.flac",
     "feed-02.flac",
     "feed-03.flac"
-  ]
+  ],
+  "crumple": [
+    "crumple-01.flac",
+    "crumple-02.flac",
+    "crumple-03.flac",
+    "crumple-04.flac",
+    "crumple-05.flac"
+  ],
+  "drawer": {
+    "open": {
+      "file": "drawer-open-01.flac",
+      "thud": 0.62
+    },
+    "close": {
+      "file": "drawer-close-01.flac",
+      "thud": 0.807
+    }
+  }
 }

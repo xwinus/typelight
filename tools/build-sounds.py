@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Cut the typewriter samples in sounds/ out of the source recordings.
+"""Cut the samples in sounds/ out of the source recordings.
 
-The sources are CC0 1.0 field recordings: typewriters recorded by Joseph Sardin
-(BigSoundBank.com) and a carriage return recorded by knufds (Freesound.org).
+The sources are CC0 1.0 field recordings: typewriters, paper and a drawer recorded
+by Joseph Sardin (BigSoundBank.com) and a carriage return recorded by knufds
+(Freesound.org).
 They are downloaded into tools/.cache/ (not committed) and sliced into
 one-shot samples:
 
@@ -11,6 +12,8 @@ one-shot samples:
   bell-NN.flac    the end-of-line bell
   return-NN.flac  a carriage return: the ratchet of the sweep, then the stop
   feed-NN.flac    the line-feed click at the start of a carriage return
+  crumple-NN.flac a sheet of paper screwed up into a ball
+  drawer-open-NN.flac, drawer-close-NN.flac   a wooden drawer
 
 Needs Python 3.9+ and ffmpeg on PATH. No other dependencies.
 
@@ -43,11 +46,19 @@ SOURCES = {
     2843: BSB.format(2843),   # one press of the space bar
     2844: BSB.format(2844),   # bell
     2845: BSB.format(2845),   # bell
+    1220: BSB.format(1220),   # "Ball paper" #1 to #5: a sheet wrinkled into a ball
+    1221: BSB.format(1221),
+    1222: BSB.format(1222),
+    1223: BSB.format(1223),
+    1224: BSB.format(1224),
+    1499: BSB.format(1499),   # a wooden drawer, opening
+    1500: BSB.format(1500),   # ... and closing
     # "Typewriter bell & carriage reset" by knufds. Freesound serves the original WAV
     # only to logged-in users, so this is its MP3 preview. Put the original at
     # tools/.cache/345955.wav and it is used instead.
     345955: "https://cdn.freesound.org/previews/345/345955_191884-hq.mp3",
 }
+CRUMPLE_SOURCES = (1220, 1221, 1222, 1223, 1224)
 RETURN_SOURCE = 345955
 RETURN_SWEEP = 0.70     # seconds of ratchet kept before the carriage hits its stop
 
@@ -242,6 +253,35 @@ def build_one_shot(audio, sid, name, length, fade_out, level_db, report):
     return write(name, l, r)
 
 
+def build_drawer(audio, sid, name, report):
+    """A slide that ends in a knock, the knock some 20 dB above the slide. Halve that
+    range, or the slide is lost under a bang. Says where the knock is, so the app can
+    time it to the drawer on the screen."""
+    L, R = audio[sid]
+    pk = peak(L, R)
+    s = 0
+    while max(abs(L[s]), abs(R[s])) < 0.02 * pk:
+        s += 1
+    l, r = shape(L, R, max(0, s - int(0.01 * SR)), len(L), fade_in=0.01, fade_out=0.15)
+    blk = int(0.01 * SR)
+    env = [max(peak(l, r, i, i + blk), 0.01 * pk) for i in range(0, len(l), blk)]
+    for i in range(len(l)):
+        a, f = divmod(i / blk - 0.5, 1)
+        a = int(max(0, min(len(env) - 1, a)))
+        b = min(len(env) - 1, a + 1)
+        g = ((env[a] * (1 - f) + env[b] * f) / pk) ** -0.5
+        l[i] *= g
+        r[i] *= g
+    top = peak(l, r)
+    thud = 0
+    while max(abs(l[thud]), abs(r[thud])) < 0.6 * top:
+        thud += 1
+    scale(l, r, lin(-8.0) / top)
+    if report:
+        print(f"  {name}  src {sid} @ {s / SR:.3f}s  {len(l) / SR:.2f}s  knock at {thud / SR:.2f}s")
+    return {"file": write(name, l, r), "thud": round(thud / SR, 3)}
+
+
 def build_feeds(audio, report):
     feeds = []
     for i, (sid, t0, _) in enumerate(FEEDS, 1):
@@ -294,13 +334,19 @@ def main():
              build_one_shot(audio, 2845, "bell-02", 1.90, 0.60, -6.0, args.report)]
     returns = build_return(audio, args.report)
     feeds = build_feeds(audio, args.report)
+    # the first second of each crumpling: the sheet is a ball by then, the rest is kneading
+    crumples = [build_one_shot(audio, sid, f"crumple-{i:02d}", 1.10, 0.35, -8.0, args.report)
+                for i, sid in enumerate(CRUMPLE_SOURCES, 1)]
+    drawer = {"open": build_drawer(audio, 1499, "drawer-open-01", args.report),
+              "close": build_drawer(audio, 1500, "drawer-close-01", args.report)}
 
     # the version changes whenever any sample does, so browsers never play a stale one
     digest = hashlib.sha1()
     for path in sorted(OUT.glob("*.flac")):
         digest.update(path.read_bytes())
     manifest = {"version": digest.hexdigest()[:10],
-                "key": keys, "space": space, "bell": bells, "return": returns, "feed": feeds}
+                "key": keys, "space": space, "bell": bells, "return": returns, "feed": feeds,
+                "crumple": crumples, "drawer": drawer}
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     total = sum(p.stat().st_size for p in OUT.glob("*.flac"))
     print(f"wrote {len(list(OUT.glob('*.flac')))} samples, {total / 1024:.0f} KB, to {OUT}")

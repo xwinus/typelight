@@ -29,6 +29,9 @@
     --ly: 50vh;
     --R: 600px;
     --desk-tile: 1200px;
+    --apron: 64px;           /* table top past the bottom of the screen */
+    --paper-end: 100vh;      /* where a sheet that runs on is cut off */
+    --pan: 0px; --drop: 300px; --dl: 0px; --dw: 100%; --pad: 40px; --mx: 77px; --hud: 46px;   /* the drawer */
     --move: 70ms;
     --ease: cubic-bezier(.2,.7,.2,1);
     --feed: 150ms;
@@ -42,8 +45,7 @@
     position: absolute; left: 0; top: 0; width: 100%;
     height: var(--vh, 100dvh);
     overflow: hidden;
-    /* a photographed, worn table top (see textures/README.md); the flat colour shows until it loads */
-    background: var(--desk) url(textures/desk.jpg) 0 0 / var(--desk-tile) var(--desk-tile);
+    background: #090706;          /* the floor under the table, seen only while the drawer is out */
     font: 400 var(--fs)/var(--lh) "Courier Prime", "Courier New", Courier, monospace;
     font-variant-ligatures: none;
     cursor: text;
@@ -51,18 +53,69 @@
     touch-action: none;
   }
 
+  /* The table top. It runs on a little past the bottom of the screen (--apron) to its
+     front edge; the view only gets that far when the drawer is pulled out. */
+  .desk {
+    position: absolute; left: 0; top: 0; width: 100%; z-index: 1;
+    height: calc(var(--vh, 100dvh) + var(--apron));
+    overflow: hidden;
+    isolation: isolate;
+    /* a photographed, worn table top (see textures/README.md); the flat colour shows until it loads */
+    background: var(--desk) url(textures/desk.jpg) 0 0 / var(--desk-tile) var(--desk-tile);
+    box-shadow: 0 4px 14px 2px rgba(0,0,0,.8);         /* what the table throws on whatever is under it */
+    will-change: transform;
+    transition: transform .5s cubic-bezier(.4,0,.2,1) .12s;
+  }
+  .desk::after {                 /* the front edge rolls away from the light */
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; z-index: 5;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.62));
+    pointer-events: none;
+  }
+  .drawer-open .desk {
+    transform: translate3d(0, calc(-1 * var(--pan)), 0);
+    transition: transform .62s cubic-bezier(.4,0,.2,1);
+    cursor: default;
+  }
+
   /* ---------- paper ---------- */
   .stage { position: absolute; top: 0; bottom: 0; z-index: 1; }
 
+  /* The sheets typed so far lie one above another up the table, the one in the machine
+     last. That one runs on past the bottom of the screen until its end has come up, and
+     is cut off there (.cut), a little short of the table's front edge. */
+  .cut {
+    position: absolute; left: -160px; right: -160px; top: -160px;
+    height: calc(var(--paper-end) + 160px);
+    overflow: hidden; pointer-events: none;
+  }
+  .pages {
+    position: absolute; left: 160px; right: 160px; top: 160px; height: 0;
+    will-change: transform;
+    transition: transform var(--feed) ease-out;
+  }
   .sheet {
-    position: absolute; left: 0; right: 0; top: 0;
-    height: calc(100% + 80px);
+    position: absolute; left: 0; right: 0;
     background-color: var(--paper);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .25 0 0 0 0 .16 0 0 0 .34 -.07'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
-    border-radius: 3px 3px 0 0;
-    box-shadow: 0 0 0 1px rgba(0,0,0,.14), 0 26px 70px rgba(0,0,0,.6);
-    will-change: transform;
-    transition: transform var(--feed) ease-out, background-position var(--feed) ease-out;
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.14);
+  }
+  .sheet::before {               /* what it throws on the table: under every sheet, so none darkens its neighbour */
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 3px;
+    box-shadow: 0 26px 70px rgba(0,0,0,.6);
+  }
+  .sheet .pn {                   /* pencilled in the corner: which page of the text this is */
+    position: absolute; right: var(--mx); top: calc(var(--lh) * 1.2);
+    font-size: 13px; line-height: 1; font-style: italic;
+    color: rgba(58,50,44,.72);
+  }
+  .under {                       /* the same shadow past where a sheet is cut off */
+    position: absolute; left: -160px; right: -160px; top: var(--paper-end); height: 200px;
+    overflow: hidden; pointer-events: none;
+  }
+  .under::before {
+    content: ""; position: absolute; left: 160px; right: 160px; top: -400px; height: 400px;
+    box-shadow: 0 26px 70px rgba(0,0,0,.6);
   }
 
   .lines {
@@ -110,6 +163,7 @@
   }
   .has-gl .light-gl { display: block; }
   .has-gl .light { display: none; }
+  .has-gl .bulb { animation: none; }          /* with WebGL the bulb follows the lamp's own flicker */
 
   /* An isolated group: dusk as the base, the lamp added on top of it,
      and the whole thing multiplied over paper, ink, rail and desk. */
@@ -156,7 +210,7 @@
     left: calc(var(--chw) / 2 - 180px); top: calc(var(--lh) - 150px);
     width: 360px; height: 260px;
     background: radial-gradient(closest-side, rgba(255,196,125,.12), rgba(255,196,125,0));
-    opacity: var(--lamp);
+    opacity: calc(var(--lamp) * var(--flicker, 1));
   }
   .caret {
     left: 0; top: calc(var(--lh) - 7px);
@@ -183,7 +237,7 @@
       0 0 6px 1px rgba(255,216,152,.95),
       0 -2px 18px 4px rgba(255,180,95,.5),
       0 -6px 46px 12px rgba(255,160,70,.2);
-    opacity: calc(.45 + var(--lamp) * .55);
+    opacity: calc((.45 + var(--lamp) * .55) * var(--flicker, 1));
     animation: bulb-on 1.5s ease-out backwards;
   }
   @keyframes bulb-on { 0% { opacity: 0; } 18% { opacity: .6; } 30% { opacity: .25; } }
@@ -211,11 +265,19 @@
   }
   .hud.quiet { opacity: 0; pointer-events: none; }
   .hud .brand { display: flex; align-items: center; gap: 9px; padding: 8px 10px; white-space: nowrap; }
-  .hud .mark { width: 17px; height: 17px; flex: none; margin-top: -2px; overflow: visible; }
-  .hud .mark-lamp { fill: #f4bd6c; filter: drop-shadow(0 0 3px rgba(255,180,95,.75)); }
-  .hud .mark-t { fill: rgba(243,231,207,.82); }
+  .hud .mark { width: 17px; height: 16px; flex: none; margin-top: -2px; fill: rgba(243,231,207,.82); }
   .hud .name { color: rgba(243,231,207,.82); margin-right: 9px; }
+  .hud .hint {                   /* how the drawer works, shown while it is out */
+    flex: 1; min-width: 0; padding: 8px 4px; text-align: center; line-height: 1.35;
+    opacity: 0; transition: opacity .35s ease;
+  }
+  .drawer-open .hud .hint { opacity: 1; }
+  @media (max-width: 619px) {    /* no room beside the name: the hint gets a row of its own, kept free for it */
+    .hud { flex-wrap: wrap; }
+    .hud .hint { order: -1; flex: 0 0 100%; min-height: calc(2.7em + 16px); }
+  }
   .hud nav { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+  .hud button[hidden] { display: none; }
   .hud button {
     all: unset; cursor: pointer; padding: 8px 10px; border-radius: 4px; white-space: nowrap;
     transition: color .2s ease;
@@ -223,17 +285,302 @@
   .hud button:hover { color: rgba(255,232,196,.95); }
   .hud button:focus-visible { outline: 1px solid rgba(255,214,160,.7); outline-offset: -1px; }
 
+  /* ---------- all the pages ---------- */
+  /* The view steps back from the machine: every page of the text lies on the table,
+     small, in rows, under the cone of a desk lamp standing at the far edge. The lamp is
+     computed like the others (see "The pages" in the script). */
+  .spread {
+    position: absolute; left: 0; top: 0; width: 100%; height: var(--vh, 100dvh); z-index: 2;
+    background: #14110f;
+    cursor: default;
+    visibility: hidden; opacity: 0;
+    transform: scale(1.45); transform-origin: 50% 42%;
+    transition: opacity .28s ease, transform .4s cubic-bezier(.4,0,.6,1), visibility 0s .4s;
+  }
+  .pages-open .spread {
+    visibility: visible; opacity: 1; transform: none;
+    transition: opacity .3s ease, transform .5s cubic-bezier(.2,.7,.2,1), visibility 0s;
+  }
+  .spread-roll {
+    position: absolute; inset: 0;
+    overflow: hidden auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none;
+  }
+  .spread-roll::-webkit-scrollbar { display: none; }
+  .spread-floor { position: relative; min-height: 100%; }
+  .spread-floor::before {        /* the table, brighter than it is: the light brings it down again, and the varnish may outshine the wood */
+    content: ""; position: absolute; inset: 0;
+    background: var(--desk) url(textures/desk.jpg) 0 0 / var(--spread-tile, 600px) var(--spread-tile, 600px);
+    filter: brightness(1.7) saturate(.82);
+  }
+  .spread.plain .spread-floor::before { filter: none; }
+  .mini {
+    all: unset; box-sizing: border-box; position: absolute;
+    background-color: var(--paper);
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.14), var(--sx, 0px) var(--sy, 7px) 16px rgba(0,0,0,.62);
+    cursor: pointer;
+    transition: transform .22s cubic-bezier(.2,.7,.2,1), box-shadow .22s ease;
+  }
+  .mini canvas { display: block; width: 100%; height: 100%; }
+  .mini:hover, .mini:focus-visible {          /* picked up a little */
+    transform: translateY(-4px) scale(1.025);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.14), calc(var(--sx, 0px) * 2) calc(var(--sy, 7px) * 2) 28px rgba(0,0,0,.6);
+  }
+  .mini.here { outline: 2px solid var(--brass); outline-offset: 5px; }       /* where the head is */
+  .mini:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .spread-gl {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    mix-blend-mode: multiply; pointer-events: none;
+  }
+  .spread.plain .spread-gl { display: none; }
+  .spread.plain::after {         /* without WebGL: a plain pool of light */
+    content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply;
+    background: radial-gradient(ellipse 60% 70% at 42% 40%, #ffe9c4, #b9966a 45%, #4a3f35 85%, #332d28);
+  }
+
+  /* ---------- the drawer ---------- */
+  /* Seen from above, like everything else: the view drops to the front edge of the
+     table and a drawer slides out from under it. The other sheets lie in it one over
+     another, each showing its first line. The lamp on the head does not reach down
+     here; a small bulb hidden under the edge of the table comes on instead. */
+  .drawer {
+    --wall: 16px; --front: 26px;
+    position: absolute; z-index: 0;
+    left: var(--dl); width: var(--dw);
+    top: calc(var(--vh, 100dvh) - var(--drop)); height: calc(var(--drop) - var(--hud) - var(--band, 0px));   /* the controls keep the strip of floor in front of it */
+    padding: 0 var(--wall) var(--front);
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+    background:
+      linear-gradient(rgba(11,9,7,.12), rgba(11,9,7,.12)),
+      var(--desk) url(textures/desk.jpg) 30% 60% / 760px 760px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.8);
+    cursor: default;
+    transform: translate3d(0, calc(-1 * var(--drop) - 12px), 0);
+    visibility: hidden;
+    transition: transform .44s cubic-bezier(.5,0,.6,1), visibility 0s .62s;
+  }
+  .drawer-open .drawer {
+    transform: none; visibility: visible;
+    transition: transform .56s cubic-bezier(.22,.8,.3,1.03) .2s, visibility 0s;   /* runs out and knocks against its stop */
+  }
+  .drawer::after {               /* the walls shade the bottom board */
+    content: ""; position: absolute; inset: 0 var(--wall) var(--front); z-index: 2;
+    box-shadow: inset 12px 0 18px -6px rgba(0,0,0,.75), inset -12px 0 18px -6px rgba(0,0,0,.75), inset 0 -14px 20px -6px rgba(0,0,0,.7);
+    pointer-events: none;
+  }
+  .well {
+    position: relative;
+    height: 100%; overflow: hidden auto;
+    overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none;
+    background:
+      linear-gradient(rgba(6,5,4,.5), rgba(6,5,4,.5)),
+      var(--desk) url(textures/desk.jpg) 70% 20% / 1100px 1100px;
+  }
+  .well::-webkit-scrollbar { display: none; }
+  .pile { padding: 24px var(--pad) calc(var(--lh) * .9); }
+
+  .leaf {
+    all: unset; box-sizing: border-box; display: block; position: relative;
+    width: 100%; height: calc(var(--lh) * 12);
+    margin-bottom: calc(var(--lh) * -9.9);              /* the next sheet lies over all but the first line */
+    color: var(--ink); text-shadow: 0 0 .5px rgba(28,23,19,.55);
+    background-color: var(--paper);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .25 0 0 0 0 .16 0 0 0 .34 -.07'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 -1px 3px rgba(0,0,0,.22), 0 -5px 14px rgba(0,0,0,.2);
+    transform: translate3d(var(--dx, 0px), var(--dy, 0px), 0) rotate(var(--tilt, 0deg));
+    transition: transform .32s cubic-bezier(.2,.7,.2,1), filter .25s ease;
+    cursor: pointer;
+  }
+  .leaf:last-child { margin-bottom: 0; }
+  /* a text of several pages: the edges of the sheets under the first show above it */
+  .leaf.thick {
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1),
+      3px -3px 0 -1px #e6dcc7, 3px -3px 0 0 rgba(0,0,0,.2),
+      -2px -6px 0 -1px #ded4be, -2px -6px 0 0 rgba(0,0,0,.2),
+      0 -7px 3px rgba(0,0,0,.22), 0 -11px 14px rgba(0,0,0,.2);
+  }
+  /* A paper clip on its top edge holds the pages together, and with them a slip of
+     paper with the text's name. A text without a name shows an empty slip to write
+     one on when the pointer is over it. */
+  .leaf .clip {
+    position: absolute; left: 27px; top: -8px; width: 14px; height: 38px; z-index: 2;
+    fill: none; stroke: #c4c0b8; stroke-width: 1.35; stroke-linecap: round;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.55));
+    pointer-events: none;
+  }
+  .leaf .slip {
+    position: absolute; left: 16px; top: -5px; z-index: 1;
+    max-width: 58%; height: calc(var(--lh) * .84); line-height: calc(var(--lh) * .84 + 3px);
+    padding: 0 14px 0 36px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 14px; font-style: italic; color: rgba(40,34,30,.9); text-shadow: none;
+    background: #e9dcb6;
+    border-radius: 1px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.4);
+    transform: rotate(-1.1deg);
+    cursor: text;
+  }
+  .leaf .slip.blank { opacity: 0; color: rgba(58,50,44,.6); transition: opacity .2s ease; }
+  .leaf:hover .slip.blank, .leaf:focus-visible .slip.blank { opacity: .8; }
+  @media (pointer: coarse) { .leaf .slip.blank { opacity: .55; } }
+  .slip-in {                     /* the slip while its name is being written */
+    all: unset; box-sizing: border-box; position: absolute; z-index: 3;
+    min-width: 240px; padding: 0 14px 0 36px;
+    font: italic 14px "Courier Prime", "Courier New", Courier, monospace;
+    color: rgba(40,34,30,.95); background: #f1e6c3;
+    border-radius: 1px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.4), 0 0 0 2px var(--brass);
+    cursor: text; user-select: text; -webkit-user-select: text;
+  }
+  .slip-in::placeholder { color: rgba(58,50,44,.5); }
+  /* The sheet under the pointer is drawn out a little: the ones lying over it slide
+     down and it catches more light. */
+  .leaf:hover, .leaf:focus-visible { filter: brightness(1.06); }
+  .pile:not(.sorting) .leaf:hover ~ .leaf, .pile:not(.sorting) .leaf:focus-visible ~ .leaf { --dy: calc(var(--lh) * 3); }
+  /* A sheet picked up to be moved: its place in the pile stays empty, and a copy of it
+     follows the hand, above everything. */
+  .leaf.held { visibility: hidden; }
+  .leaf.lifted {
+    position: absolute; z-index: 3; margin: 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 22px 48px rgba(0,0,0,.55);
+    will-change: transform;
+    pointer-events: none;
+  }
+  .leaf.lifted::after {          /* the light where it is held, worked out in the script */
+    content: ""; position: absolute; inset: 0;
+    background: var(--lit, #767070);
+    mix-blend-mode: multiply;
+  }
+  .holding, .holding * { cursor: grabbing !important; }
+
+  .leaf:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+  .leaf .body {                  /* a block as tall as the sheet, or the button would centre its text */
+    display: block; height: 100%; overflow: hidden;
+    padding: calc(var(--lh) * .95) var(--mx) 0;
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
+  .leaf .note {                  /* pencilled in the corner: when, and how long */
+    position: absolute; right: var(--mx); top: calc(var(--lh) * .3);
+    font-size: 13px; line-height: 1; font-style: italic;
+    color: rgba(58,50,44,.72); text-shadow: none;
+  }
+
+  /* What was thrown away: balls of paper on the floor beside the drawer. The floor is
+     further from the eye than the table, so it travels less when the view drops. */
+  .bin {
+    position: absolute; inset: 0; z-index: 0;
+    pointer-events: none; cursor: default;
+    visibility: hidden;
+    transform: translate3d(0, calc(var(--pan) * .6), 0);
+    transition: transform .5s cubic-bezier(.4,0,.2,1) .12s, visibility 0s .62s;
+  }
+  .drawer-open .bin { transform: none; visibility: visible; transition: transform .62s cubic-bezier(.4,0,.2,1), visibility 0s; }
+  .ball {
+    all: unset; position: absolute; width: var(--ball, 84px); height: var(--ball, 84px);
+    border-radius: 50%;
+    pointer-events: auto; cursor: pointer;
+    transition: filter .2s ease;
+  }
+  .ball canvas { position: absolute; left: -20%; top: -20%; width: 140%; height: 140%; pointer-events: none; }
+  .ball:hover, .ball:focus-visible { filter: brightness(1.75); }
+  .ball:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .ball.pending { visibility: hidden; }             /* still in the air, or being smoothed out */
+  .ball.plain { background: radial-gradient(circle at 40% 35%, #6f6a66, #3a3735 70%); }    /* no WebGL to draw it with */
+  .fx {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 3;
+    pointer-events: none;
+    display: none;
+  }
+
+  /* The drawer's light, multiplied over everything in it (see "drawerLight" in the
+     script); the gradient is the fallback for browsers without WebGL. */
+  .drawer-gl, .drawer-glow {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 3;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+  .drawer-gl { display: none; }
+  .has-dgl .drawer-gl { display: block; }
+  .has-dgl .drawer-glow { display: none; }
+  .drawer-glow { background: radial-gradient(ellipse 70% 95% at 50% 0, #f1d6aa, #a98d6c 35%, #5d5350 70%, var(--ambient)); }
+
+  /* ---------- opening ---------- */
+  /* A sheet of frosted glass over the room, with the name on it.
+     The lamp is already coming on behind; then the glass clears. The fade is pure
+     CSS, so the cover always lifts even if the script stalls. */
+  .splash {
+    position: absolute; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    padding-bottom: 6vh;
+    background:
+      linear-gradient(140deg, rgba(255,244,226,.07), rgba(255,244,226,0) 42%),
+      rgba(20,17,14,.34);
+    -webkit-backdrop-filter: blur(26px) saturate(1.35);
+    backdrop-filter: blur(26px) saturate(1.35);
+    color: #f6ecd8;
+    pointer-events: none;
+    animation: splash-out .5s ease var(--hold, 1s) forwards;        /* --hold: until the lamp burns steadily */
+  }
+  .splash::before {      /* the frost itself: a fine grain, so it reads as glass and not as a blur */
+    content: ""; position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 -.14'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: .5;
+  }
+  /* The mark sits straight on the glass. Behind it the glass is a little smokier,
+     with no edge to it, so the name stays readable when the lamp is right there. */
+  .splash .lockup {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+    padding: 120px 180px;
+    background: radial-gradient(closest-side, rgba(14,11,9,.5), rgba(14,11,9,.28) 45%, rgba(14,11,9,0));
+    animation: splash-in .25s ease both;
+  }
+  .splash svg { width: 84px; fill: currentColor; filter: drop-shadow(0 2px 12px rgba(0,0,0,.45)); }
+  .splash .name {
+    font-size: 23px; font-weight: 700; line-height: 1; letter-spacing: .04em;
+    text-shadow: 0 1px 3px rgba(0,0,0,.5), 0 2px 14px rgba(0,0,0,.5);
+    opacity: 0; transition: opacity .3s ease;
+  }
+  .fonts .splash .name { opacity: 1; }          /* wait for the typeface, so the name never reflows */
+  .splash.skip { animation: none; opacity: 0; transition: opacity .22s ease; }
+  @keyframes splash-in { from { opacity: 0; } }
+  @keyframes splash-out {
+    to { opacity: 0; visibility: hidden; -webkit-backdrop-filter: blur(0) saturate(1); backdrop-filter: blur(0) saturate(1); }
+  }
+  /* no backdrop blur in this browser: smoked glass instead */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .splash { background: rgba(20,17,14,.9); }
+  }
+
+  /* until the lamp is switched on, nothing of it shows */
+  :root:not(.lit) .beam, :root:not(.lit) .bulb, :root:not(.lit) .haze { opacity: 0; animation: none; }
+
   .probe { position: absolute; left: -999px; top: 0; visibility: hidden; white-space: pre; }
 
   @media (prefers-reduced-motion: reduce) {
-    .beam, .bulb, .c.fr { animation: none; }
+    .beam, .bulb, .c.fr, .splash .lockup { animation: none; }
+    .desk, .drawer, .drawer-open .desk, .drawer-open .drawer, .leaf, .bin, .drawer-open .bin, .ball, .spread, .pages-open .spread, .mini { transition: none; }
+    .splash { animation-duration: .01s; animation-delay: 1s; }
   }
 </style>
 </head>
 <body>
 <div class="room" id="room">
+  <div class="drawer" id="drawer" inert>
+    <div class="well" id="well"><div class="pile" id="pile"></div></div>
+    <canvas class="drawer-gl" id="dgl" aria-hidden="true"></canvas>
+    <div class="drawer-glow"></div>
+  </div>
+
+  <!-- the floor beside the drawer: what was thrown away lies here, crumpled, and can be picked up again -->
+  <div class="bin" id="bin" inert></div>
+
+  <div class="desk" id="desk">
   <div class="stage" id="stage">
-    <div class="sheet" id="sheet"></div>
+    <div class="cut"><div class="pages" id="pages"></div></div>
+    <div class="under" id="under"></div>
     <div class="lines" id="lines" aria-hidden="true"></div>
     <div class="rail"></div>
   </div>
@@ -251,25 +598,49 @@
   </div>
 
   <textarea id="ta" aria-label="Text" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"></textarea>
+  </div>
+
+  <!-- every page of the text in the machine, laid out on the table under a desk lamp -->
+  <div class="spread" id="spread" inert>
+    <div class="spread-roll" id="spreadRoll"><div class="spread-floor" id="spreadFloor"></div></div>
+    <canvas class="spread-gl" id="sgl" aria-hidden="true"></canvas>
+  </div>
+
+  <!-- a sheet being screwed up, or smoothed out again, is drawn here -->
+  <canvas class="fx" id="fx" aria-hidden="true"></canvas>
 
   <footer class="hud" id="hud">
     <div class="brand">
-      <svg class="mark" viewBox="12 13 40 39" aria-hidden="true">
-        <path class="mark-lamp" d="M15 31a17 17 0 0 1 34 0z"/>
-        <path class="mark-t" d="M13 34h38v9h-4v-4H34.5v8H41v4H23v-4h6.5v-8H17v4h-4z"/>
+      <svg class="mark" viewBox="6 8 52 48" aria-hidden="true">
+        <path d="M6 8h52v15h-6v-7H30v40h-8V16H12v7H6z"/>
+        <path d="M34 20h8v28h10v-7h6v15H34z"/>
       </svg>
       <span class="name">Typelight</span>
       <span class="count" id="count">0 words</span>
     </div>
+    <span class="hint" id="hint" aria-live="polite"></span>
     <nav>
+      <button type="button" id="bPages" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
+      <button type="button" id="bDrawer" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
       <button type="button" id="bLamp" title="Lamp brightness"></button>
       <button type="button" id="bSound" title="Typewriter sounds"></button>
       <button type="button" id="bSave" title="Download the text as a file (⌘S / Ctrl+S)">Save .txt</button>
-      <button type="button" id="bNew" title="Clear the text and start on a blank sheet">New sheet</button>
+      <button type="button" id="bNew" title="Put this text away in the drawer and start another on a blank sheet">New text</button>
     </nav>
   </footer>
 
   <span class="probe" id="probe">00000000000000000000</span>
+
+  <!-- Shown for a second while the page settles; any key or click sends it away. -->
+  <div class="splash" id="splash" aria-hidden="true">
+    <div class="lockup">
+      <svg viewBox="6 8 52 48">
+        <path d="M6 8h52v15h-6v-7H30v40h-8V16H12v7H6z"/>
+        <path d="M34 20h8v28h10v-7h6v15H34z"/>
+      </svg>
+      <span class="name">Typelight</span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -278,29 +649,44 @@
 
 const $ = id => document.getElementById(id);
 const root = document.documentElement;
-const room = $('room'), stage = $('stage'), sheet = $('sheet'), linesEl = $('lines');
+const room = $('room'), stage = $('stage'), pagesEl = $('pages'), underEl = $('under'), linesEl = $('lines');
 const beam = $('beam'), head = $('head'), kick = $('kick'), bulb = $('bulb');
 const ta = $('ta'), hud = $('hud'), probe = $('probe'), countEl = $('count');
 
 const TEXT_KEY = 'typelight.text', PREF_KEY = 'typelight.prefs';
+const AT_KEY = 'typelight.edited', PILE_KEY = 'typelight.drawer', TITLE_KEY = 'typelight.title';
+const isDemo = () => location.hash.toLowerCase() === '#demo';
+const DEMO = isDemo();      // a drawer of sample sheets to play with; nothing is read or saved
 const DESK_TILE = 36;       // one tile of the desk photograph, in line heights
-const TOP_ROWS = 3;        // blank lines above the first line of the sheet
-const EDGE = 80;           // how far the sheet's top edge may leave the screen
+const TOP_ROWS = 3, BOTTOM_ROWS = 3;   // blank lines above the first line of a sheet, and below its last
+// A sheet is A4, in proportion to the type. A typewriter puts ten characters to the inch,
+// so the sheet's 210 mm are 82.68 of them across; 62 are typed, an inch in from either edge.
+const A4_COLS = 210 / 25.4 * 10, A4_TALL = 297 / 210, MAX_COLS = 62;
+const PAGE_FEED = 620;     // ms to roll a full sheet out and the next one in
 const BELL_BEFORE = 8;     // the bell rings this many columns before the margin
 const LAMPS = [.5, .76, 1];
 const LAMP_NAMES = ['low', 'medium', 'full'];
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const S = {
-  text: '', lines: [{ s: 0, e: 0 }], row: 0, col: 0,
+  text: '', lines: [{ s: 0, e: 0 }],
+  caret: 0, row: 0, col: 0, goal: 0,   // where the head is: in the text, on the sheet, and the column it keeps to going up and down
   scroll: 0, snapFrom: 0,          // how far the paper is rolled back, px
-  cols: 0, margin: 6, chw: 0, lh: 0, ly: 0, vw: 0, vh: 0, left: 0,
+  cols: 0, margin: 6, chw: 0, lh: 0, fs: 0, ly: 0, vw: 0, vh: 0, left: 0,
+  dh: 0, paperEnd: 0,              // the table top's height, and where a sheet still running on is cut off
+  w: 0, ph: 0, per: 34,            // a sheet: width and height in px, and the lines typed on one
+  pitch: 0, skip: 0,               // from one sheet's top to the next, and what that adds between two lines
+  np: 1,                           // sheets lying on the table, the one in the machine among them
+  drop: 0, dl: 0, dw: 0, hud: 0,   // the drawer: how far the view drops for it, its left edge and width; the controls' height
+  at: Date.now(),                  // when the text in the machine was last typed on
+  title: '',                       // ... and its name, if it has been given one
   sound: true, lamp: 2, fresh: -1,
 };
 
 const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: keep going unsaved */ } },
+  get(k) { if (DEMO) return null; try { return localStorage.getItem(k); } catch { return null; } },
+  // false when the browser would not take it (storage full or switched off): the app keeps going unsaved
+  set(k, v) { if (DEMO) return true; try { localStorage.setItem(k, v); return true; } catch { return false; } },
 };
 
 /* ------------------------------------------------------------------ *
@@ -322,31 +708,54 @@ function wrapPara(t, s, e, cols, push) {
   push(ls, e);
 }
 
-// Re-lay out from the paragraph containing text index p (everything before p is unchanged).
-function layout(p) {
-  const t = S.text, lines = S.lines;
+// Lays the text out again after a change. Before text index p it is as it was; from
+// there on, "gone" characters of the old text have made way for "came" new ones. Only
+// the paragraphs the change touches are wrapped again: the lines after them keep their
+// breaks and are moved along.
+function layout(p, gone, came) {
+  const t = S.text, lines = S.lines, d = came - gone;
   const ps = p <= 0 ? 0 : t.lastIndexOf('\n', p - 1) + 1;
-  let k = lines.length;
-  while (k > 0 && lines[k - 1].s >= ps) k--;
-  const tail = lines.splice(k);
-  let j = 0;
+  let pe = t.indexOf('\n', p + came);
+  if (pe === -1) pe = t.length;
+  let k0 = 0, k1 = lines.length;
+  for (let lo = 0, hi = lines.length; lo < hi;) { const m = lo + hi >> 1; if (lines[m].s < ps) lo = k0 = m + 1; else hi = k0 = m; }
+  for (let lo = k0, hi = lines.length; lo < hi;) { const m = lo + hi >> 1; if (lines[m].s <= pe - d) lo = k1 = m + 1; else hi = k1 = m; }
+  const fresh = [];
+  let j = k0;
   // Keep the old line object when its content is untouched, so its DOM is not rebuilt.
   const push = (s, e) => {
-    const o = tail[j++];
-    lines.push(o && o.s === s && o.e === e && e <= p ? o : { s, e });
+    const o = j < k1 ? lines[j] : null;
+    j++;
+    if (o && o.s === s && o.e === e && e <= p) fresh.push(o);
+    else if (o && s >= p + came && o.s + d === s && o.e + d === e) { o.s = s; o.e = e; fresh.push(o); }      // the same line, moved along
+    else fresh.push({ s, e });
   };
-  let i = ps;
-  for (;;) {
+  for (let i = ps; ;) {
     let e = t.indexOf('\n', i);
-    const last = e === -1;
-    if (last) e = t.length;
+    if (e === -1) e = t.length;
     wrapPara(t, i, e, S.cols, push);
-    if (last) break;
+    if (e >= pe) break;
     i = e + 1;
   }
-  S.row = lines.length - 1;
-  S.col = t.length - lines[S.row].s;
+  if (d) for (let k = k1; k < lines.length; k++) { lines[k].s += d; lines[k].e += d; }
+  S.lines = lines.slice(0, k0).concat(fresh, lines.slice(k1));
+  locate();
 }
+// The whole text, from nothing: after the line length has changed, or for another text.
+function layoutAll() {
+  S.lines = [{ s: 0, e: 0 }];
+  layout(0, 0, S.text.length);
+}
+// Where on the paper the head is, from where in the text it is.
+function locate() {
+  const lines = S.lines, c = S.caret = Math.max(0, Math.min(S.text.length, S.caret));
+  let lo = 0, hi = lines.length - 1;
+  while (lo < hi) { const m = lo + hi + 1 >> 1; if (lines[m].s <= c) lo = m; else hi = m - 1; }
+  S.row = lo;
+  S.col = c - lines[lo].s;
+}
+const lastRow = () => S.lines.length - 1;
+const atEnd = () => S.caret >= S.text.length;
 
 /* ------------------------------------------------------------------ *
  * Rendering: only the lines near the viewport exist in the DOM.
@@ -378,12 +787,33 @@ function lineHTML(s, e) {
 }
 
 const els = new Map();   // row -> element
+const pageEls = new Map();   // sheet -> element
+
+// A text runs over as many sheets as it takes: so many lines to a sheet, and then the
+// next one, which lies a little way below it.
+const pageOf = r => Math.floor(r / S.per);
+const rowY = r => r * S.lh + pageOf(r) * S.skip;
+// how many sheets a text fills
+function pagesOf(text) {
+  let rows = 0;
+  const count = () => { rows++; };
+  for (let i = 0; ;) {
+    let e = text.indexOf('\n', i);
+    const last = e === -1;
+    if (last) e = text.length;
+    wrapPara(text, i, e, S.cols, count);
+    if (last) break;
+    i = e + 1;
+  }
+  return S.cols ? Math.ceil(rows / S.per) : 1;      // (before the sheet has been measured, nobody can say)
+}
 
 function renderLines() {
   const { row, lh, ly, vh, lines } = S;
   const hi = Math.max(S.scroll, S.snapFrom), lo = Math.min(S.scroll, S.snapFrom);
-  const rMin = Math.max(0, row - Math.ceil((ly + hi) / lh) - 4);
-  const rMax = Math.min(lines.length - 1, row + Math.ceil((vh - ly - lo) / lh) + 4);
+  // (a dozen lines to spare: rolled fast, the paper is still on its way from further off)
+  const rMin = Math.max(0, row - Math.ceil((ly + hi) / lh) - 12);
+  const rMax = Math.min(lines.length - 1, row + Math.ceil((vh - ly - lo) / lh) + 12);
 
   for (const [r, el] of els) {
     if (r < rMin || r > rMax) { el.remove(); els.delete(r); }
@@ -394,7 +824,7 @@ function renderLines() {
     if (!el) {
       el = document.createElement('div');
       el.className = 'ln';
-      el.style.top = r * lh + 'px';
+      el.style.top = rowY(r) + 'px';
       linesEl.appendChild(el);
       els.set(r, el);
     }
@@ -404,6 +834,23 @@ function renderLines() {
         ? '<span class="ghost">Start typing…</span>'
         : lineHTML(ln.s, ln.e);
     }
+  }
+
+  // ... and the sheets those lines are on
+  const kMin = pageOf(rMin), kMax = Math.min(S.np - 1, pageOf(Math.max(0, rMax)) + 1);      // (S.np: see place)
+  for (const [k, el] of pageEls) {
+    if (k < kMin || k > kMax) { el.remove(); pageEls.delete(k); }
+  }
+  for (let k = kMin; k <= kMax; k++) {
+    if (pageEls.has(k)) continue;
+    const el = document.createElement('div');
+    el.className = 'sheet';
+    el.style.top = k * S.pitch - TOP_ROWS * lh + 'px';
+    el.style.height = S.ph + 'px';
+    el.style.backgroundPosition = `${k * 53 % 240}px ${k * 97 % 240}px`;
+    if (k) el.innerHTML = `<span class="pn">${k + 1}</span>`;      // the first page of a text goes unnumbered
+    pagesEl.appendChild(el);
+    pageEls.set(k, el);
   }
 }
 
@@ -419,31 +866,8 @@ function renderLines() {
  * The result is exposed like a photograph, which is what makes the hot
  * spot bleach towards white while the edges stay amber.
  * ------------------------------------------------------------------ */
-const light = (() => {
-  const cv = $('gl');
-  const WRAP = 4800;            // the paper texture repeats after this many px of scroll
-  let gl = null, U = null, raf = 0, until = 0;
-  let level = 0, last = 0, born = performance.now(), struck = -1e9;
-
-  const VERT = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }';
-  const FRAG = `
-precision highp float;
-uniform vec2 uRes;      // viewport, css px
-uniform float uDpr;
-uniform vec3 uLamp;     // bulb: x, y (css px, y down) and height above the paper
-uniform float uLevel;
-uniform vec4 uPaper;    // left, right, top edge, and how far the sheet has travelled
-uniform float uLh;      // line height, the unit everything scales with
-uniform sampler2D uDesk;  // normal map of the desk
-uniform vec2 uDeskTile;   // its tile size in css px, and 1 once it has loaded
-
-const float TILT  = 0.95;   // beam axis, radians away from straight down, towards the top of the page
-const float OUTER = 1.45;   // the hood cuts everything beyond this angle from the axis
-const float INNER = 1.15;   // ... and the penumbra starts here
-const float FOCUS = 1.2;    // how tightly the reflector gathers the beam
-const float EXPOSURE = 7.0;
-const vec3 AMBIENT = vec3(0.289, 0.278, 0.316);   // cool dusk, before exposure
-
+// what both lamps' shaders share: noise, and the relief of a sheet of paper
+const GLSL_NOISE = `
 float hash(vec2 p) {
   vec3 q = fract(vec3(p.xyx) * .1031);
   q += dot(q, q.yzx + 33.33);
@@ -461,16 +885,76 @@ float sheet(vec2 q) {
   return 3.4 * noise(q / 160., vec2(8192., 30.))
        + .11 * noise(q / vec2(14., 4.), vec2(8192., 1200.));
 }
+`;
+
+// Compiles a full-screen fragment shader on a canvas; throws if WebGL cannot do it.
+function glProgram(cv, frag, names) {
+  const gl = cv.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false });
+  if (!gl) throw new Error('no WebGL');
+  const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+  if (!hp || hp.precision < 23) throw new Error('no real floats');      // the paper texture needs them
+  const compile = (type, src) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }'));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, frag));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, 'a');
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  const U = {};
+  for (const name of names) U[name] = gl.getUniformLocation(prog, name);
+  return { gl, U };
+}
+
+const light = (() => {
+  const cv = $('gl');
+  let gl = null, U = null, raf = 0, until = 0;
+  let level = 0, last = 0, lit = false, born = 0, start = null, struck = -1e9;
+
+  const FRAG = `
+precision highp float;
+uniform vec2 uRes;      // viewport, css px
+uniform float uDpr;
+uniform vec3 uLamp;     // bulb: x, y (css px, y down) and height above the paper
+uniform float uLevel;
+uniform vec4 uPaper;    // the sheets: left and right edge, the top of the first one in view, and which that is
+uniform vec3 uPages;    // a sheet's height, how far it is from one's top to the next, and how many there are from that one on
+uniform float uPaperEnd;  // where a sheet that runs on past the screen is cut off
+uniform float uLh;      // line height, the unit everything scales with
+uniform sampler2D uDesk;  // normal map of the desk
+uniform vec2 uDeskTile;   // its tile size in css px, and 1 once it has loaded
+
+const float TILT  = 0.95;   // beam axis, radians away from straight down, towards the top of the page
+const float OUTER = 1.45;   // the hood cuts everything beyond this angle from the axis
+const float INNER = 1.15;   // ... and the penumbra starts here
+const float FOCUS = 1.2;    // how tightly the reflector gathers the beam
+const float EXPOSURE = 7.0;
+const vec3 AMBIENT = vec3(0.289, 0.278, 0.316);   // cool dusk, before exposure
+
+${GLSL_NOISE}
 
 void main() {
   vec2 p = vec2(gl_FragCoord.x, uRes.y * uDpr - gl_FragCoord.y) / uDpr;
-  bool onPaper = p.x >= uPaper.x && p.x <= uPaper.y && p.y >= uPaper.z;
+  float down = p.y - uPaper.z;                       // how far down its sheet this pixel is
+  float page = clamp(floor(down / uPages.y), 0., uPages.z - 1.);
+  down -= page * uPages.y;
+  bool onPaper = p.x >= uPaper.x && p.x <= uPaper.y && down >= 0. && down <= uPages.x && p.y <= uPaperEnd;
 
   // surface slope under this pixel
   vec2 slope = vec2(0.);
   vec3 n;
   if (onPaper) {
-    vec2 q = vec2(p.x - uPaper.x, p.y - uPaper.w);
+    vec2 q = vec2(p.x - uPaper.x, down + mod((uPaper.w + page) * 1777., 4800.));    // no two sheets cockle alike
     float h0 = sheet(q);
     slope = vec2(sheet(q + vec2(1., 0.)) - h0, sheet(q + vec2(0., 1.)) - h0);
     vec2 cell = mod(floor(q / 1.5), vec2(8192., 3200.));        // the tooth of the paper
@@ -522,30 +1006,7 @@ void main() {
 
   function init() {
     try {
-      gl = cv.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false });
-      if (!gl) return false;
-      const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
-      if (!hp || hp.precision < 23) return false;      // the paper texture needs real floats
-      const compile = (type, src) => {
-        const sh = gl.createShader(type);
-        gl.shaderSource(sh, src);
-        gl.compileShader(sh);
-        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
-        return sh;
-      };
-      const prog = gl.createProgram();
-      gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
-      gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
-      gl.linkProgram(prog);
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-      gl.useProgram(prog);
-      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-      const a = gl.getAttribLocation(prog, 'a');
-      gl.enableVertexAttribArray(a);
-      gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
-      U = {};
-      for (const name of ['uRes', 'uDpr', 'uLamp', 'uLevel', 'uPaper', 'uLh', 'uDesk', 'uDeskTile']) U[name] = gl.getUniformLocation(prog, name);
+      ({ gl, U } = glProgram(cv, FRAG, ['uRes', 'uDpr', 'uLamp', 'uLevel', 'uPaper', 'uPages', 'uPaperEnd', 'uLh', 'uDesk', 'uDeskTile']));
       loadDesk();
     } catch (err) {
       console.warn('Typelight: WebGL light unavailable, using the simple one.', err);
@@ -578,7 +1039,7 @@ void main() {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
         gl.uniform1i(U.uDesk, 0);
         deskReady = true;
-        wake();
+        run();
       } catch (err) {
         console.warn('Typelight: the desk relief could not be used.', err);
       }
@@ -590,28 +1051,28 @@ void main() {
     if (!gl) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     cv.width = Math.round(S.vw * dpr);
-    cv.height = Math.round(S.vh * dpr);
+    cv.height = Math.round(S.dh * dpr);
     gl.viewport(0, 0, cv.width, cv.height);
-    wake();
+    run();
   }
 
   const at = el => new DOMMatrixReadOnly(getComputedStyle(el).transform);
-  // the bulb coming on: a first glow, a dip, then up to full
-  const warmUp = w => w < .18 ? .45 * w / .18 : w < .3 ? .45 - .25 * (w - .18) / .12 : .2 + .8 * (1 - Math.pow(1 - (w - .3) / .7, 2));
 
   function frame(now) {
     raf = 0;
     if (!gl) return;
     // Head and paper move by CSS transitions; read where they are right now.
-    const h = at(head), paperY = at(linesEl).m42, top = at(sheet).m42;
+    const h = at(head), top0 = at(linesEl).m42 - TOP_ROWS * S.lh;      // (where the first sheet's top edge is)
+    const first = Math.max(0, Math.min(S.np - 1, Math.floor(-top0 / S.pitch)));
 
     const target = LAMPS[S.lamp];
     const dt = Math.min(100, now - last);
     last = now;
     level += (target - level) * (reduce ? 1 : 1 - Math.exp(-dt / 130));
-    let k = level, dy = 0;
-    const w = (now - born) / 1500;
-    if (!reduce && w < 1) k *= warmUp(Math.max(0, w));
+    let k = lit ? level : 0, dy = 0;
+    let dim = 1;                                    // everything that makes the bulb unsteady
+    const warming = lit && start !== null && now - born < start.dur;
+    if (warming) dim = start.at(now - born);
     const since = now - struck;                     // a strike shakes the filament for a moment
     const ringing = !reduce && since < 280;
     if (ringing) {
@@ -620,46 +1081,165 @@ void main() {
       dy = 1.6 * a * Math.cos(since / 15);
     }
 
+    if (flaw) {
+      const ms = now - flaw.t0;
+      if (ms >= flaw.dur) flaw = null;
+      else dim *= flaw.at(ms);
+    }
+    k *= dim;
+    if (dim !== shownDim) {                         // the bulb itself dims with its light
+      shownDim = dim;
+      head.style.setProperty('--flicker', dim.toFixed(3));
+    }
+
     const dpr = cv.width / S.vw;
-    gl.uniform2f(U.uRes, S.vw, S.vh);
+    gl.uniform2f(U.uRes, S.vw, S.dh);
     gl.uniform1f(U.uDpr, dpr);
     gl.uniform3f(U.uLamp, h.m41 + S.chw / 2, h.m42 + S.lh + 2 + dy, S.lh * 5.2);
     gl.uniform1f(U.uLevel, k);
-    gl.uniform4f(U.uPaper, S.left, S.left + (S.cols + 2 * S.margin) * S.chw, top, ((paperY % WRAP) + WRAP) % WRAP);
+    gl.uniform4f(U.uPaper, S.left, S.left + S.w, top0 + first * S.pitch, first % 97);
+    gl.uniform3f(U.uPages, S.ph, S.pitch, S.np - first);
+    gl.uniform1f(U.uPaperEnd, S.paperEnd);
     gl.uniform1f(U.uLh, S.lh);
     gl.uniform2f(U.uDeskTile, S.lh * DESK_TILE, deskReady ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    if (now < until || Math.abs(target - level) > .003 || (!reduce && w < 1) || ringing) raf = requestAnimationFrame(frame);
+    if (now < until || Math.abs(target - level) > .003 || warming || ringing || flaw) raf = requestAnimationFrame(frame);
   }
 
   // Nothing is drawn while nothing changes; callers say for how long things will move.
-  function wake(ms = 0) {
+  function run(ms = 0) {
     until = Math.max(until, performance.now() + ms);
     if (gl && !raf) raf = requestAnimationFrame(frame);
   }
 
+  // No lamp burns perfectly steadily. Left alone for a while, this one now and then
+  // stutters, sinks for a moment or trembles, and then is itself again. Each of these
+  // returns the brightness (1 = normal) at a given millisecond of the episode.
+  // The dips look deep here, but the picture is exposed like a photograph, which
+  // flattens them: the lamp losing a third shows as about a sixth on the lit paper.
+  // A stutter never has more than three dips, so it stays a flaw and never a strobe.
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const tent = x => Math.max(0, 1 - Math.abs(x));
+  function imperfection() {
+    const pick = Math.random();
+    if (pick < .45) {                       // a loose contact: two or three quick dips
+      const dips = [];
+      let t = 50;
+      for (let i = 0, n = Math.random() < .5 ? 2 : 3; i < n; i++) {
+        dips.push({ t, w: rnd(55, 95), d: rnd(.28, .5) });
+        t += rnd(110, 200);
+      }
+      return { dur: t + 40, at: ms => 1 - dips.reduce((sum, p) => sum + p.d * tent((ms - p.t) / p.w), 0) };
+    }
+    if (pick < .8) {                        // a sag: something else in the house draws current
+      const depth = rnd(.3, .45), fall = 140, hold = rnd(350, 1100), rise = rnd(350, 700);
+      return {
+        dur: fall + hold + rise,
+        at: ms => {
+          const e = ms < fall ? ms / fall : ms < fall + hold ? 1 : 1 - (ms - fall - hold) / rise;
+          return 1 - depth * e * e * (3 - 2 * e) * (1 + .06 * Math.sin(ms / 23));
+        },
+      };
+    }
+    const dur = rnd(600, 1000), amp = rnd(.12, .2), hz = rnd(5, 8), phase = rnd(0, 6.283);    // a tremble
+    return { dur, at: ms => 1 - amp * (.5 + .5 * Math.sin(ms / 1000 * hz * 6.283 + phase)) * Math.sin(Math.PI * ms / dur) };
+  }
+  // Switching on. The bulb does not simply come up: it catches, fails, catches again,
+  // and only then holds, and it never does it the same way twice. Returns the
+  // brightness at a given millisecond, like the imperfections above.
+  const IGNITION_MAX = 1000;       // ms; the opening screen waits for it, so it must not drag
+  function ignition() {
+    let seq = ignitionOnce();
+    while (seq.dur > IGNITION_MAX) seq = ignitionOnce();
+    return seq;
+  }
+  function ignitionOnce() {
+    const keys = [[0, 0]];
+    let t = rnd(40, 140);                                   // a beat of darkness after the switch
+    let floor = 0;
+    // now and then it starts almost cleanly; usually it takes two or three tries.
+    // Never more than three: that keeps it a flicker and not a strobe.
+    const tries = Math.random() < .15 ? 1 : Math.random() < .55 ? 2 : 3;
+    for (let i = 0; i < tries; i++) {
+      const from = t;
+      const peak = rnd(.18, .8);
+      keys.push([t, floor]);
+      keys.push([t += rnd(20, 60), peak]);                  // it catches
+      keys.push([t += rnd(15, 90), peak * rnd(.7, 1.05)]);  // holds for an instant
+      floor = Math.random() < .35 ? 0 : rnd(.02, .22);      // and drops back, sometimes to nothing
+      keys.push([t += rnd(40, 110), floor]);
+      t = Math.max(t + rnd(20, 120), from + 180);
+    }
+    keys.push([t, floor]);
+    const rise = rnd(180, 380);
+    if (Math.random() < .5) keys.push([t + rise * .7, 1.08], [t += rise, 1]);   // overshoots, settles
+    else keys.push([t += rise, 1]);
+    const dur = t;
+    const f1 = rnd(.035, .06), f2 = rnd(.011, .02), p1 = rnd(0, 6.283), p2 = rnd(0, 6.283);
+    return {
+      dur,
+      at(ms) {
+        let i = 1;
+        while (i < keys.length - 1 && keys[i][0] < ms) i++;
+        const [t0, v0] = keys[i - 1], [t1, v1] = keys[i];
+        const x = t1 > t0 ? Math.min(1, Math.max(0, (ms - t0) / (t1 - t0))) : 1;
+        const v = v0 + (v1 - v0) * x * x * (3 - 2 * x);
+        const unsteady = 1 - ms / dur;                      // the filament shivers until it has caught
+        return Math.max(0, v * (1 + .12 * unsteady * (.6 * Math.sin(ms * f1 + p1) + .4 * Math.sin(ms * f2 + p2))));
+      },
+    };
+  }
+
+  let flaw = null, flawTimer = 0, shownDim = 1;
+  // Any activity puts the next one off, so they only come when the page is left alone.
+  function idle() {
+    clearTimeout(flawTimer);
+    if (reduce || !gl) return;
+    flawTimer = setTimeout(() => {
+      if (lit && !document.hidden) {
+        flaw = imperfection();
+        flaw.t0 = performance.now();
+        run(flaw.dur + 80);
+      }
+      idle();
+    }, rnd(7000, 22000));
+  }
+  function wake(ms = 0) { run(ms); idle(); }
+
   return {
     init, size, wake,
+    // switches the lamp on and says how many ms it will take to burn steadily
+    ignite() {
+      lit = true;
+      born = performance.now();
+      start = reduce || !gl ? null : ignition();
+      wake(start ? start.dur + 100 : 0);
+      return start ? start.dur : reduce ? 0 : 1500;       // 1500: the fixed warm-up of the fallback light
+    },
     strike() { struck = performance.now(); wake(300); },
   };
 })();
 
 const EASE_STEP = 'cubic-bezier(.2,.7,.2,1)', EASE_RETURN = 'cubic-bezier(.3,0,.6,1)';
 
+let leaving = 0;
 function place(moveMs, feedMs, ease = EASE_STEP) {
   root.style.setProperty('--move', moveMs + 'ms');
   root.style.setProperty('--feed', feedMs + 'ms');
   root.style.setProperty('--ease', ease);
   const { lh, ly, row, col, chw } = S;
-  const y = ly - row * lh + S.scroll;
-  linesEl.style.transform = `translate3d(0,${y}px,0)`;
+  const y = ly - rowY(row) + S.scroll;
+  linesEl.style.transform = pagesEl.style.transform = `translate3d(0,${y}px,0)`;
 
-  // The sheet is one screen tall and stops just above the viewport;
-  // past that point only its grain keeps travelling.
-  const top = y - TOP_ROWS * lh, sy = Math.max(top, -EDGE);
-  sheet.style.transform = `translate3d(0,${sy}px,0)`;
-  sheet.style.backgroundPosition = `0 ${top - sy}px`;
+  // Going back onto the sheet before, the one being left stays until it has rolled away.
+  const n = pageOf(lastRow()) + 1;
+  clearTimeout(leaving);
+  if (n < S.np && feedMs > 0) leaving = setTimeout(() => { S.np = n; renderLines(); light.wake(); }, feedMs + 30);
+  else S.np = n;
+  // a sheet that reaches as far as the bottom of the screen is cut off just below it
+  const down = S.paperEnd - (y - TOP_ROWS * lh), k = Math.floor(down / S.pitch);
+  underEl.hidden = !(k >= 0 && k < n && down - k * S.pitch <= S.ph);
 
   const hx = S.left + (S.margin + col) * chw;
   head.style.transform = `translate3d(${hx}px,${ly}px,0)`;
@@ -675,14 +1255,30 @@ function measure() {
   root.style.setProperty('--vh', S.vh + 'px');
 
   const chw = probe.getBoundingClientRect().width / 20;
-  const lh = Math.round(parseFloat(getComputedStyle(probe).fontSize) * 1.72);
-  const margin = S.vw < 520 ? 2 : S.vw < 900 ? 4 : 7;
-  const cols = Math.max(16, Math.min(62, Math.floor((S.vw - 16) / chw) - 2 * margin));
-  const changed = cols !== S.cols || lh !== S.lh || Math.abs(chw - S.chw) > .01;
-  Object.assign(S, { chw, lh, margin, cols });
+  const fs = parseFloat(getComputedStyle(probe).fontSize);
+  const lh = Math.round(fs * 1.72);
+  // The sheet is A4 if the screen has the width for it. Where it has not, the margins
+  // go first and then the line gets shorter; the sheet stays as long as it was.
+  const avail = (S.vw - 16) / chw, least = S.vw < 520 ? 2 : S.vw < 900 ? 4 : 7;
+  const margin = Math.min((A4_COLS - MAX_COLS) / 2, Math.max(least, (avail - MAX_COLS) / 2));
+  const cols = Math.max(16, Math.min(MAX_COLS, Math.floor(avail - 2 * margin + 1e-6)));
+  const ph = Math.round(A4_COLS * chw * A4_TALL);
+  const per = Math.max(8, Math.floor(ph / lh) - TOP_ROWS - BOTTOM_ROWS);
+  const pitch = ph + Math.round(lh * 1.5);
+  const changed = cols !== S.cols || lh !== S.lh || per !== S.per || Math.abs(chw - S.chw) > .01;
+  Object.assign(S, { chw, lh, margin, cols, fs, ph, per, pitch, skip: pitch - per * lh });
   S.ly = Math.round(S.vh * .5);
 
+  // The table top ends two lines below the screen, the sheet a little before that.
+  // With the drawer out the view drops past the machine, to where the sheet ends and
+  // the table with it: the drawer gets most of the screen (on a phone nearly all).
+  const apron = lh * 2;
+  S.dh = S.vh + apron;
+  S.paperEnd = S.vh + Math.round(lh * .8);
+  const drop = S.vw < 620 ? S.vh - lh * 3 : Math.round(S.vh * .7);
+
   const W = Math.round((cols + 2 * margin) * chw);
+  S.w = W;
   S.left = Math.round((S.vw - W) / 2);
   stage.style.left = S.left + 'px';
   stage.style.width = W + 'px';
@@ -692,18 +1288,33 @@ function measure() {
   root.style.setProperty('--ly', S.ly + 'px');
   root.style.setProperty('--R', Math.round(Math.min(27 * lh, S.vw * .8)) + 'px');
   root.style.setProperty('--desk-tile', lh * DESK_TILE + 'px');
+  const pad = Math.max(4, Math.min(44, S.left - 22));     // room between the sheets and the drawer's walls
+  root.style.setProperty('--apron', apron + 'px');
+  root.style.setProperty('--paper-end', S.paperEnd + 'px');
+  root.style.setProperty('--drop', drop + 'px');
+  root.style.setProperty('--pan', drop + apron + 'px');
+  root.style.setProperty('--pad', pad + 'px');
+  Object.assign(S, { drop, dl: S.left - pad - DRAWER_WALL, dw: W + 2 * (pad + DRAWER_WALL), hud: hud.offsetHeight });
+  root.style.setProperty('--dl', S.dl + 'px');
+  root.style.setProperty('--dw', S.dw + 'px');
+  root.style.setProperty('--mx', margin * chw + 'px');
+  root.style.setProperty('--hud', S.hud + 'px');
+  drawer.arrange();
 
   if (changed) {
     for (const el of els.values()) el.remove();
     els.clear();
-    S.lines = [{ s: 0, e: 0 }];
-    layout(0);
+    layoutAll();
   }
-  S.scroll = Math.max(0, Math.min(S.row * S.lh, S.scroll));
+  for (const el of pageEls.values()) el.remove();
+  pageEls.clear();
+  if (S.scroll) S.scroll = rowY(S.row) - rowY(rowAtHead());      // (still with a line under the head)
   S.snapFrom = S.scroll;
   light.size();
+  drawerLight.size();
   place(0, 0);
   renderLines();
+  spread.size();
 }
 
 /* ------------------------------------------------------------------ *
@@ -715,7 +1326,7 @@ const RETURN_SWEEP = .76;    // seconds the carriage takes to cross the full lin
 
 const snd = (() => {
   const DIR = 'sounds/';
-  const LEVEL = { key: 1, space: .8, back: .6, bell: .3, ret: .8, feed: .8 };
+  const LEVEL = { key: 1, space: .8, back: .6, bell: .3, ret: .8, feed: .8, crumple: .5, drawer: .55 };
   let ctx = null, out = null;
   let bank = null;           // decoded samples by kind, once loaded
   let failed = false;
@@ -749,7 +1360,9 @@ const snd = (() => {
       if (m.version) version = '?v=' + m.version;
 
       // A few files at a time: small dev servers drop connections when hit with all of them at once.
-      const names = [...m.key, ...m.space, ...m.bell, ...m.feed, ...m.return.map(r => r.file)];
+      const crumple = m.crumple || [], dr = m.drawer || {};
+      const names = [...m.key, ...m.space, ...m.bell, ...m.feed, ...m.return.map(r => r.file), ...crumple,
+        ...[dr.open, dr.close].filter(Boolean).map(d => d.file)];
       const bufs = {};
       const worker = async () => {
         while (names.length) {
@@ -763,6 +1376,8 @@ const snd = (() => {
       bank = {
         key: of(m.key), space: of(m.space), bell: of(m.bell), feed: of(m.feed),
         ret: m.return.map(r => ({ buf: bufs[r.file], start: r.start, thud: r.thud })),
+        crumple: of(crumple),
+        drawer: { open: dr.open && { buf: bufs[dr.open.file], thud: dr.open.thud }, close: dr.close && { buf: bufs[dr.close.file], thud: dr.close.thud } },
       };
     } catch (err) {
       failed = true;
@@ -862,6 +1477,19 @@ const snd = (() => {
       if (!ready()) return;
       play(pick('bell'), { gain: LEVEL.bell, pan: .25 });
     },
+    // a sheet screwed up into a ball (or, quieter and quicker, smoothed out again)
+    crumple(force = 1) {
+      if (!ready() || !bank.crumple.length) return;
+      play(pick('crumple'), { gain: LEVEL.crumple * force * rnd(.85, 1), rate: rnd(.96, 1.05) * (force < 1 ? 1.15 : 1) });
+    },
+    // The drawer: a slide that ends in a knock. It is started so that the knock falls
+    // when the drawer on the screen reaches its stop, "lands" seconds from now.
+    drawer(out, lands) {
+      const d = ready() && bank.drawer[out ? 'open' : 'close'];
+      if (!d) return;
+      const early = d.thud - lands;           // the recording's slide is longer than the screen's: come in late
+      play(d.buf, { gain: LEVEL.drawer, offset: Math.max(0, early), fade: early > 0 ? .03 : 0, when: Math.max(0, -early) });
+    },
     tick() {
       if (!ready()) return;
       const now = performance.now();
@@ -892,7 +1520,8 @@ function strikeOnKeyDown(e) {
   if (e.metaKey || e.ctrlKey) return;                                                  // shortcuts, AltGr
   const pan = panOf(S.col);
   let kind = null;
-  if (k === 'Backspace') { if (ta.value.length) { snd.back(pan); kind = 'back'; } }
+  if (k === 'Backspace') { if (S.caret > 0) { snd.back(pan); kind = 'back'; } }
+  else if (k === 'Delete') { if (!atEnd()) { snd.back(pan); kind = 'back'; } }
   else if (k === 'Enter') { snd.ret(returnTravel(S.col)); kind = 'ret'; }
   else if (k === ' ') { snd.space(pan); kind = 'key'; }
   else if (k.length === 1) { snd.key(pan); kind = 'key'; }
@@ -900,28 +1529,35 @@ function strikeOnKeyDown(e) {
 }
 
 function onInput() {
+  if (drawer.open) drawer.set(false);       // typing shuts the drawer and goes back to the sheet
+  if (spread.open) spread.set(false);       // ... and the pages
   let v = ta.value;
-  if (v.indexOf('\t') !== -1) { v = v.replace(/\t/g, '    '); ta.value = v; }
+  if (v.indexOf('\t') !== -1) {            // tabs become spaces, and the caret stays after what it was after
+    const c = v.slice(0, ta.selectionStart).replace(/\t/g, '    ').length;
+    v = v.replace(/\t/g, '    ');
+    ta.value = v;
+    ta.setSelectionRange(c, c);
+  }
   const old = S.text;
   if (v === old) return;
 
-  let p;
-  if (v.length >= old.length && v.startsWith(old)) p = old.length;
-  else if (old.startsWith(v)) p = v.length;
-  else {
-    p = 0;
-    const n = Math.min(old.length, v.length);
-    while (p < n && old.charCodeAt(p) === v.charCodeAt(p)) p++;
-  }
-  const del = old.length - p, add = v.slice(p);
+  // what went and what came: the two texts are alike up to p, and again from q characters before their ends
+  const least = Math.min(old.length, v.length);
+  let p = 0, q = 0;
+  while (p < least && old.charCodeAt(p) === v.charCodeAt(p)) p++;
+  while (q < least - p && old.charCodeAt(old.length - 1 - q) === v.charCodeAt(v.length - 1 - q)) q++;
+  const del = old.length - p - q, add = v.slice(p, v.length - q);
   const lastCh = add ? add[add.length - 1] : '';
   const pr = S.row, pc = S.col;
   const pre = struck && performance.now() - struck.at < 100 ? struck.kind : null;
   struck = null;
 
   S.text = v;
-  S.fresh = add.length === 1 && add !== ' ' && add !== '\n' ? v.length - 1 : -1;
-  layout(p);
+  // the head goes where the browser has put the caret: after what was typed, as a rule
+  S.caret = ta.selectionStart === ta.selectionEnd ? ta.selectionStart : p + add.length;
+  S.fresh = add.length === 1 && add !== ' ' && add !== '\n' ? S.caret - 1 : -1;
+  layout(p, del, add.length);
+  S.goal = S.col;
 
   const dRow = S.row - pr;
   let move = 70, feed = 150, ease = EASE_STEP;
@@ -929,9 +1565,20 @@ function onInput() {
     move = Math.round(returnTravel(Math.abs(S.col - pc)) * 1000);
     ease = EASE_RETURN;
   } else if (dRow < 0) move = Math.min(420, 150 + Math.abs(S.col - pc) * 5);
-  if (S.scroll > 0) {                       // typing rolls the paper back to the line
-    if (S.scroll < S.vh) { S.snapFrom = S.scroll; feed = 280; } else feed = 0;
+  let far = false;
+  if (S.scroll) {                           // typing rolls the paper back to the line
+    if (Math.abs(S.scroll) < S.vh) { S.snapFrom = S.scroll; feed = 280; } else { feed = 0; far = true; }
     S.scroll = 0;
+    paintCount();
+  }
+  // The sheet is full: it rolls out and the next one in. (Or, deleting, the one before comes back.)
+  const turn = pageOf(S.row) - pageOf(pr);
+  if (turn && !far) {
+    if (Math.abs(turn) > 1) feed = 0;       // a paste over several sheets is not rolled through
+    else {
+      feed = PAGE_FEED;
+      if (turn < 0) S.snapFrom = Math.max(S.snapFrom, S.skip + S.lh);
+    }
   }
   const travel = move / 1000;
   if (reduce) { move = 0; feed = 0; }
@@ -951,6 +1598,7 @@ function onInput() {
 
     if (dRow > 0 && pre !== 'ret') snd.ret(travel);
     else if (dRow < 0) snd.tick();
+    if (feed === PAGE_FEED) for (let i = 1; i <= 5; i++) setTimeout(() => snd.tick(), i * 95);     // the platen, turned by hand
     else if (add) {
       const bellCol = S.cols - BELL_BEFORE;
       if (pc < bellCol && S.col >= bellCol) snd.bell();
@@ -958,6 +1606,22 @@ function onInput() {
     if (add && lastCh !== '\n') thud();
   }
   touched();
+}
+
+// Puts a whole other text on the sheet at once and without a sound: a sheet from the drawer.
+function setText(text) {
+  for (const el of els.values()) el.remove();
+  els.clear();
+  ta.value = text;
+  S.text = text;
+  S.fresh = -1;
+  S.scroll = 0; S.snapFrom = 0;
+  S.caret = text.length;                    // a text is taken up where it was left: at its end
+  layoutAll();
+  S.goal = S.col;
+  place(0, 0);
+  renderLines();
+  pinCaret();
 }
 
 function thud() {
@@ -974,25 +1638,116 @@ function insert(str) {
   ta.focus({ preventScroll: true });
   let done = false;
   try { done = document.execCommand('insertText', false, str); } catch { /* fall through */ }
-  if (!done) ta.value += str;
+  if (!done) { ta.value = S.text.slice(0, S.caret) + str + S.text.slice(S.caret); ta.setSelectionRange(S.caret + str.length, S.caret + str.length); }
   onInput();
 }
 
+// The browser's caret is kept where the head is, and nothing is ever selected: the head
+// is moved by the paper and the carriage (see goTo), not by the browser.
 function pinCaret() {
-  const n = ta.value.length;
+  if (composing) return;                    // the browser is putting a character together: leave it to it
+  const n = S.caret;
   if (ta.selectionStart !== n || ta.selectionEnd !== n) ta.setSelectionRange(n, n);
 }
 
+// Brings the head to text index c: the paper is rolled until that line is under it and
+// the carriage is moved to the column. This is how a mistake further back is got at.
+function goTo(c, keepGoal) {
+  if (drawer.open) drawer.set(false);
+  const r0 = S.row, c0 = S.col, s0 = S.scroll;
+  S.caret = c;
+  locate();
+  if (!keepGoal) S.goal = S.col;
+  S.fresh = -1;
+  const from = rowY(S.row) - rowY(r0) + s0;         // where the paper is now, counted from where it will be
+  const far = Math.abs(from) > S.vh * 1.5, turned = !s0 && pageOf(S.row) !== pageOf(r0);
+  S.scroll = 0;
+  S.snapFrom = far ? 0 : from;
+  const feed = reduce || far || !from ? 0 : turned ? PAGE_FEED : Math.round(Math.min(320, 110 + Math.abs(from) * .4));
+  const move = reduce ? 0 : Math.round(Math.min(420, 70 + Math.abs(S.col - c0) * 6));
+  place(move, feed);
+  renderLines();
+  S.snapFrom = 0;
+  pinCaret();
+  if (S.row !== r0 || s0) snd.tick();
+  else if (S.col !== c0) snd.back(panOf(S.col));
+  paintCount();
+  wake();
+}
+// The line nearest to a place y down the strip of sheets (counted like rowY).
+function rowAt(y) {
+  const k = Math.max(0, Math.min(pageOf(lastRow()), Math.floor((y + TOP_ROWS * S.lh) / S.pitch)));
+  const r = k * S.per + Math.max(0, Math.min(S.per - 1, Math.round((y - k * S.pitch) / S.lh)));
+  return Math.max(0, Math.min(lastRow(), r));
+}
+// The line the paper has been rolled to: the one under the head now.
+const rowAtHead = () => rowAt(rowY(S.row) - S.scroll);
+const inRow = (r, col) => S.lines[r].s + Math.max(0, Math.min(S.lines[r].e - S.lines[r].s, col));
+// The arrow keys: the carriage a character left or right, the paper a line up or down.
+// If the paper has been rolled away from the head, they first take hold of it where it is.
+function nudge(dx, dy) {
+  if (S.scroll) { goTo(inRow(rowAtHead(), S.goal), true); return; }
+  if (dx) goTo(Math.max(0, Math.min(S.text.length, S.caret + dx)));
+  else {
+    const r = S.row + dy;
+    if (r >= 0 && r <= lastRow()) goTo(inRow(r, S.goal), true);
+  }
+}
+// A click on the paper: the head goes to the character there.
+function goToPoint(x, y) {
+  const top = new DOMMatrixReadOnly(getComputedStyle(linesEl).transform).m42;
+  const ys = y - top, k = Math.floor((ys + TOP_ROWS * S.lh) / S.pitch);
+  if (x < S.left || x > S.left + S.w || k < 0) return false;
+  const down = ys - k * S.pitch;
+  if (down < -TOP_ROWS * S.lh || down > S.ph - TOP_ROWS * S.lh) return false;      // between two sheets
+  const r = Math.min(lastRow(), k * S.per + Math.max(0, Math.min(S.per - 1, Math.floor(down / S.lh))));
+  goTo(k > pageOf(lastRow()) ? S.text.length : inRow(r, Math.round((x - S.left) / S.chw - S.margin)));
+  return true;
+}
+
+// The platen has a ratchet: the paper only ever rests with a line under the head, never
+// between two. Whatever is asked for, the nearest line is what comes.
 function setScroll(v, feedMs = 0) {
-  v = Math.max(0, Math.min(S.row * S.lh, v));
+  v = rowY(S.row) - rowY(rowAt(rowY(S.row) - v));
   if (v === S.scroll) return;
-  const a = Math.floor(S.scroll / S.lh), b = Math.floor(v / S.lh);
+  const was = S.scroll;
   S.snapFrom = feedMs ? S.scroll : v;
   S.scroll = v;
   place(0, reduce ? 0 : feedMs);
   renderLines();
   S.snapFrom = v;
-  if (a !== b) snd.tick();
+  snd.tick();
+  if (!v !== !was) paintCount(); else if (v && pageOf(lastRow())) paintCount();
+}
+
+// Rolling by hand, with the wheel or a finger: the travel is saved up and paid out a line
+// at a time. From the last line of a sheet the next click is the first line of the next one.
+const ROLL_STEP = 90, ROLL_PAUSE = 220;     // ms a line takes to come; ms of rest after which a roll counts as a new one
+let slack = 0, rolledAt = 0;
+function roll(dy, notch) {                  // dy: px, positive brings earlier lines down to the head
+  const now = performance.now(), fresh = now - rolledAt > ROLL_PAUSE;
+  rolledAt = now;
+  if (fresh || dy * slack < 0) slack = 0;
+  slack += dy;
+  // one notch of a wheel is at least one line, however little travel the mouse reports for it
+  let n = Math.trunc(slack / S.lh);
+  if (!n && notch && fresh && dy) n = Math.sign(dy);
+  if (!n) return;
+  slack = Math.abs(slack) < S.lh ? 0 : slack - n * S.lh;
+  const r0 = rowAtHead(), r = Math.max(0, Math.min(lastRow(), r0 - n));
+  if (r === r0) { slack = 0; return; }
+  const turn = pageOf(r) !== pageOf(r0);
+  setScroll(rowY(S.row) - rowY(r), Math.abs(n) > 3 ? 0 : turn ? 320 : ROLL_STEP);
+}
+
+// To the top of a sheet: its first line comes to where the head is, as when it was begun.
+// d: -1 the sheet before (or the top of this one, from further down it), 1 the next, 0 the first.
+function toPage(d) {
+  const here = rowY(S.row), y = here - S.scroll, last = pageOf(lastRow());
+  const cur = Math.max(0, Math.min(last, Math.floor((y + S.lh * .5) / S.pitch)));
+  const k = !d ? 0 : d < 0 ? (y > cur * S.pitch + S.lh * .5 ? cur : cur - 1) : cur + 1;
+  const v = k > last ? here - rowY(lastRow()) : here - Math.max(0, k) * S.pitch;      // past the last sheet: the end of the text
+  setScroll(v, Math.abs(v - S.scroll) > S.pitch * 1.2 ? 0 : 320);      // a long way is not rolled through
 }
 
 ta.addEventListener('input', onInput);
@@ -1011,42 +1766,1719 @@ ta.addEventListener('keydown', e => {
   const k = e.key, mod = e.metaKey || e.ctrlKey;
   if (mod && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
   if (mod && (k === 'a' || k === 'A')) { e.preventDefault(); return; }
+  if (drawer.open) {
+    if (k === 'Tab') return;                // on to the sheets in the drawer
+    if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); drawer.roll(k === 'ArrowUp' ? -1 : 1); return; }
+  }
   switch (k) {
-    case 'ArrowUp':   e.preventDefault(); setScroll(S.scroll + S.lh, 110); break;
-    case 'ArrowDown': e.preventDefault(); setScroll(S.scroll - S.lh, 110); break;
-    case 'PageUp':    e.preventDefault(); setScroll(S.scroll + Math.round(S.vh * .6 / S.lh) * S.lh, 260); break;
-    case 'PageDown':  e.preventDefault(); setScroll(S.scroll - Math.round(S.vh * .6 / S.lh) * S.lh, 260); break;
-    case 'Escape':    setScroll(0, 260); break;
-    case 'ArrowLeft': case 'ArrowRight': case 'Home': case 'End': e.preventDefault(); break;
+    case 'ArrowUp':   e.preventDefault(); if (mod) toPage(0); else nudge(0, -1); break;
+    case 'ArrowDown': e.preventDefault(); if (mod) goTo(S.text.length); else nudge(0, 1); break;
+    case 'ArrowLeft': e.preventDefault(); nudge(-1, 0); break;
+    case 'ArrowRight': e.preventDefault(); nudge(1, 0); break;
+    case 'PageUp':    e.preventDefault(); toPage(-1); break;
+    case 'PageDown':  e.preventDefault(); toPage(1); break;
+    case 'Home':      e.preventDefault(); if (mod) toPage(0); else goTo(S.lines[S.row].s); break;
+    case 'End':       e.preventDefault(); goTo(mod ? S.text.length : S.lines[S.row].e); break;
+    // back: first the paper to where the head is, then the head to the end of the text
+    case 'Escape':    if (S.scroll) setScroll(0, Math.abs(S.scroll) > S.pitch * 1.2 ? 0 : 260); else if (!atEnd()) goTo(S.text.length); break;
     case 'Tab':       e.preventDefault(); insert('    '); break;
     default:          strikeOnKeyDown(e);
   }
 });
 
 // keep the machine under the fingers
-document.addEventListener('keydown', () => {
+document.addEventListener('keydown', e => {
+  if (drawer.naming) return;                // a name is being written on a slip: the keys are its own
+  if (spread.open) {
+    if (e.key === 'Escape') { spread.set(false); return; }
+    if (spread.has(document.activeElement) && /^(Tab|Enter| |Shift|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) return;
+  }
+  if (drawer.open) {
+    if (e.key === 'Escape') { if (!drawer.letGo()) drawer.set(false); return; }
+    // these work the texts in the drawer (see its key handler); anything else is typing
+    if (drawer.has(document.activeElement) && /^(Tab|Enter| |Shift|Alt|ArrowUp|ArrowDown|Delete|Backspace|F2)$/.test(e.key)) return;
+  }
   if (document.activeElement !== ta) ta.focus({ preventScroll: true });
 }, true);
+let pressed = null;        // where the pointer went down on the table, to tell a click from a drag
+room.addEventListener('pointerdown', e => { pressed = e.target.closest('#desk') && !e.button ? { x: e.clientX, y: e.clientY } : null; });
 room.addEventListener('pointerup', e => {
   snd.ensure();
-  if (!e.target.closest('button')) ta.focus({ preventScroll: true });
+  if (!e.target.closest('button, input') && !drawer.naming) ta.focus({ preventScroll: true });
+  // a click on the paper, with the drawer shut: the head goes there
+  const was = pressed;
+  pressed = null;
+  if (was && !drawer.open && S.text && e.target.closest('#desk') && Math.hypot(e.clientX - was.x, e.clientY - was.y) < 6) goToPoint(e.clientX, e.clientY);
 });
 
 // rolling the paper back to reread
 room.addEventListener('wheel', e => {
+  if (spread.open) return;                  // the pages scroll by themselves
+  if (drawer.open) {                        // the drawer scrolls by itself; the paper stays put
+    if (!drawer.has(e.target)) e.preventDefault();
+    return;
+  }
   e.preventDefault();
-  setScroll(S.scroll - e.deltaY * (e.deltaMode === 1 ? S.lh : 1));
+  roll(-e.deltaY * (e.deltaMode === 1 ? S.lh : e.deltaMode === 2 ? S.pitch : 1), true);
 }, { passive: false });
 let touchY = null;
-room.addEventListener('touchstart', e => { touchY = e.touches[0].clientY; wake(); }, { passive: true });
+room.addEventListener('touchstart', e => { touchY = drawer.open || spread.open ? null : e.touches[0].clientY; slack = 0; wake(); }, { passive: true });
 room.addEventListener('touchmove', e => {
   if (touchY === null) return;
   const y = e.touches[0].clientY;
-  setScroll(S.scroll + (y - touchY));
+  roll(y - touchY);
   touchY = y;
   e.preventDefault();
 }, { passive: false });
 room.addEventListener('touchend', () => { touchY = null; });
+
+/* ------------------------------------------------------------------ *
+ * The drawer: the other sheets. The one in the machine is not in it.
+ * Taking a sheet out puts the one from the machine back, on top. Sheets
+ * are moved by dragging them, and thrown away by pulling them out over
+ * the side: they land on the floor as a ball of paper, and a ball can be
+ * smoothed out again. Only the oldest balls are ever really gone.
+ * ------------------------------------------------------------------ */
+// Open the app with #demo for a drawer of these to try things on; nothing is saved then.
+const DEMO_NAMES = ['The ferry', '', 'The bell, chapter four', 'Second draft', '', ''];
+const DEMO_SHEETS = [
+  'The ferry left at six, and by the time the harbour lights had thinned to a string of beads behind us I had already decided not to come back. Nobody on deck knew that yet, least of all my brother, who stood at the rail counting gulls as if they owed him money. I let him count. There would be time enough for the rest of it once the island was out of sight.',
+  'Dear Marta,\n\nThe apple trees came through the frost after all. I walked the whole row this morning with a cup of coffee going cold in my hand, and every one of them is in bud. You were right and I was wrong, and I am putting that in writing so you can keep it.\n\nThe roof is another matter.',
+  'Chapter Four\n\nNobody in the village would say who had rung the bell that night, though by breakfast everyone knew. The baker knew, and gave short weight to no one. The priest knew, and preached on patience. Only the mayor went about asking, loudly, in the square, and was answered with the weather.\n\n' +
+  'It had been a dry month and the weather was easily told. He heard about the wells, which were low, and about the plums, which were early, and from the widow Kessler he heard a good deal about her knees, which had foretold a storm that then went round by the other valley. He wrote none of it down. He had brought a notebook for the purpose and by noon it held one line, his own name, and under it the date.\n\n' +
+  'The bell itself hung where it had always hung, and showed nothing. He climbed up to look at it all the same, forty-one steps, counting them aloud because the sacristan was behind him and he did not want to be heard breathing. The rope had been coiled and hung on its nail. Somebody had swept. On the sill of the little window lay a pear core, quite fresh, and beside it, folded small, a paper that had held bread.\n\n' +
+  '"Boys," said the sacristan.\n\n' +
+  '"At two in the morning?"\n\n' +
+  '"Boys are up at all hours. I was a boy." He said it as a man owns to having once had the measles.\n\n' +
+  'The mayor put the paper in his pocket and left the core where it was. Going down he did not count. In the square the market was setting up, and he stood for a while and watched the awnings go out one after another, striped, plain, striped, each with its pole and its particular way of being stubborn, and it came to him that every person under them had been woken in the night by the same sound, and had lain there, and had known whose hand it was, and had gone back to sleep.\n\n' +
+  'He bought a loaf he did not want. The baker wrapped it and took his money and gave him his change, exact, coin by coin, into the palm.\n\n' +
+  '"Fine morning," said the baker.\n\n' +
+  'The mayor agreed that it was. He went back to his office with the loaf under his arm and sat down, and opened the notebook, and under the date he wrote: forty-one steps. Then, because it was true and he could think of nothing else that was, he wrote: a pear.',
+  'Things to fix in the second draft. The brother arrives too late and leaves too early. The letter cannot be found in a coat pocket, everyone finds letters in coat pockets. Cut the dream. Cut the second dream. Find out what a ferry ticket cost in 1961 and whether they punched it or tore it.',
+  'It rained for eleven days. On the twelfth my father took the boat out anyway, because the nets were his and the weather was only the weather, and we watched him from the kitchen window until the glass fogged over with our breathing. My mother wiped it with her sleeve and went on watching. She did not sit down until dark.',
+  'A list of sounds in this house at four in the morning: the refrigerator deciding something. The stair that answers a foot that is not there. A train a long way off, which is the same train every night and is going, I have decided, to the sea. The cat, who also cannot sleep, and has opinions about it.',
+];
+
+// A second, smaller lamp: a bulb under the front edge of the table that comes on when
+// the drawer is out, the way the light in a fridge does. The bulb itself stays out of
+// sight under the table; what shows is its light. That is computed per pixel, like the
+// lamp on the head, and multiplied over the drawer and what lies in it. The shader is
+// told where each sheet lies, so every sheet gets its own waviness and lean, and its
+// top edge, which faces the bulb, catches the light.
+const DRAWER_WALL = 16, DRAWER_FRONT = 26;      // as in the stylesheet
+const drawerLight = (() => {
+  const cv = $('dgl'), el = $('drawer'), well = $('well'), pile = $('pile');
+  const MAX = 16;                               // sheets the shader can tell apart at once
+  // beam axis, radians away from straight down, out from under the table; the holder cuts
+  // the light off beyond OUTER radians from that axis, and the penumbra starts at INNER
+  const TILT = 1.02, OUTER = 1.2, INNER = .8, FOCUS = 1.3, EXPOSURE = 13, DUSK = .29;
+  const leaves = new Float32Array(MAX * 4), seeds = new Float32Array(MAX);
+  let gl = null, U = null, raf = 0, last = 0, until = 0, w = 0, h = 0;
+  let on = false, t0 = 0, k = 0;
+
+  const FRAG = `
+precision highp float;
+uniform vec2 uRes;      // the drawer, css px
+uniform float uDpr;
+uniform vec3 uLamp;     // bulb: x, y (css px from the drawer's corner, y down) and height above the sheets
+uniform float uLevel;
+uniform float uLh;
+uniform vec3 uWell;     // the bottom board: left, right and front edge
+uniform vec4 uLeaf[${MAX}];   // the sheets in view, lowest in the pile first: centre, then cosine and sine of its turn
+uniform float uSeed[${MAX}];  // what makes each of them itself
+uniform vec2 uLeafSize;
+uniform int uCount;
+
+const float TILT  = ${TILT.toFixed(3)};
+const float OUTER = ${OUTER.toFixed(3)};
+const float INNER = ${INNER.toFixed(3)};
+const float FOCUS = ${FOCUS.toFixed(3)};
+const float EXPOSURE = ${EXPOSURE.toFixed(3)};
+const vec3 AMBIENT = vec3(0.289, 0.278, 0.316);
+${GLSL_NOISE}
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y * uDpr - gl_FragCoord.y) / uDpr;
+  bool inWell = p.x >= uWell.x && p.x <= uWell.y && p.y <= uWell.z;
+
+  // which sheet is on top here, and where on it
+  float found = 0., seed = 0.;
+  vec2 q = vec2(0.);
+  if (inWell) {
+    for (int i = 0; i < ${MAX}; i++) {
+      if (i >= uCount) break;
+      vec4 L = uLeaf[i];
+      vec2 d = p - L.xy;
+      vec2 r = vec2(L.z * d.x + L.w * d.y, L.z * d.y - L.w * d.x) + uLeafSize * .5;
+      if (r.x >= 0. && r.y >= 0. && r.x <= uLeafSize.x && r.y <= uLeafSize.y) { found = 1.; q = r; seed = uSeed[i]; }
+    }
+  }
+
+  vec2 slope = vec2(0.);
+  float up = 0.;                       // how far this surface stands above the bottom board
+  if (found > .5) {
+    vec2 t = q + seed * vec2(977., 613.);
+    float h0 = sheet(t);
+    slope = vec2(sheet(t + vec2(1., 0.)) - h0, sheet(t + vec2(0., 1.)) - h0);
+    vec2 cell = mod(floor(t / 1.5), vec2(8192., 3200.));
+    slope += (vec2(hash(cell), hash(cell + 71.3)) - .5) * .085;
+    // no sheet in a pile lies flat: each has its own slow wave across it, and its own lean
+    float f = 6.2832 * (.55 + hash(vec2(seed, 3.))) / uLeafSize.x;
+    slope.x += .05 * cos(q.x * f + seed * 5.);
+    slope.y += (hash(vec2(seed, 9.)) - .5) * .07;
+    // the top edge stands a little proud: the cut edge faces the bulb and is bright,
+    // and just behind it the paper dips away into a thin shade
+    float e = q.y;
+    slope.y += 1.3 * smoothstep(2.2, .3, e) - .26 * smoothstep(1.6, 3.2, e) * exp(-max(e - 3., 0.) / 7.);
+  } else if (inWell) {
+    slope = (vec2(noise(p / 3., vec2(4096.)), noise(p / 3. + 31., vec2(4096.))) - .5) * .25;   // bare, rough board
+  } else {
+    up = uLh * 1.5;                    // the walls' top edges are nearer the bulb
+  }
+  vec3 n = normalize(vec3(-slope, 1.));
+
+  vec3 toLamp = vec3(uLamp.xy - p, uLamp.z - up);
+  float d = length(toLamp);
+  vec3 l = toLamp / d;
+  float facing = max(dot(n, l), 0.);
+
+  vec3 axis = vec3(0., sin(TILT), -cos(TILT));
+  float ct = dot(-l, axis);
+  float theta = acos(clamp(ct, -1., 1.));
+  float hood = smoothstep(cos(OUTER), cos(INNER), ct);
+  float beam = pow(max(ct, 0.), FOCUS);
+
+  // a cheap bulb in a cheap holder: streaks fanning out, faint rings
+  vec3 side = cross(axis, vec3(1., 0., 0.));
+  float around = atan(dot(-l, side), -l.x);
+  float streaks = noise(vec2(around * 7. + 7., 9.5), vec2(64.)) - .5;
+  float flaws = 1. + .34 * streaks * smoothstep(.1, 1., theta) + .04 * sin(theta * 44.);
+
+  float lit = uLevel * EXPOSURE * beam * hood * flaws * facing * (uLamp.z * uLamp.z) / (d * d);
+  float fill = uLevel * .2 * (1. - .4 * p.y / uRes.y);         // what the inside of a wooden box throws back
+
+  vec3 dusk = AMBIENT * (1.05 - .15 * p.x / uRes.x);
+  vec3 warm = mix(vec3(1., .62, .34), vec3(1., .80, .56), hood);
+  vec3 c = dusk + warm * lit + vec3(1., .72, .46) * fill;
+  c = 1. - exp(-c);
+  c += (hash(gl_FragCoord.xy) - .5) / 255.;
+  gl_FragColor = vec4(c, 1.);
+}`;
+
+  function init() {
+    try {
+      ({ gl, U } = glProgram(cv, FRAG, ['uRes', 'uDpr', 'uLamp', 'uLevel', 'uLh', 'uWell', 'uLeaf', 'uSeed', 'uLeafSize', 'uCount']));
+    } catch (err) {
+      console.warn('Typelight: no WebGL light for the drawer, using the simple one.', err);
+      gl = null;
+      return;
+    }
+    cv.addEventListener('webglcontextlost', e => {
+      e.preventDefault();
+      gl = null;
+      root.classList.remove('has-dgl');
+    });
+    root.classList.add('has-dgl');
+  }
+
+  function size() {
+    w = el.offsetWidth; h = el.offsetHeight;
+    if (!gl || !w || !h) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+    gl.viewport(0, 0, cv.width, cv.height);
+    wake();
+  }
+
+  // Where the sheets are right now (they slide when one is drawn out, and scroll).
+  // Only the ones in view are passed on, the topmost of them if there are too many.
+  function findLeaves() {
+    const box = cv.getBoundingClientRect();
+    const seen = [];
+    for (const b of pile.children) {
+      if (b.classList.contains('held')) continue;                 // picked up: it is not lying here just now
+      const r = b.getBoundingClientRect();
+      if (r.bottom > box.top && r.top < box.bottom) seen.push([b, r]);
+    }
+    const use = seen.slice(-MAX);
+    use.forEach(([b, r], i) => {
+      leaves[i * 4] = (r.left + r.right) / 2 - box.left;
+      leaves[i * 4 + 1] = (r.top + r.bottom) / 2 - box.top;
+      leaves[i * 4 + 2] = Math.cos(b.turn);
+      leaves[i * 4 + 3] = Math.sin(b.turn);
+      seeds[i] = b.seed;
+    });
+    const first = pile.firstElementChild;
+    if (first) gl.uniform2f(U.uLeafSize, first.offsetWidth, first.offsetHeight);
+    gl.uniform4fv(U.uLeaf, leaves);
+    gl.uniform1fv(U.uSeed, seeds);
+    gl.uniform1i(U.uCount, use.length);
+  }
+
+  function frame(now) {
+    raf = 0;
+    const dt = Math.min(100, now - last);
+    last = now;
+    let moving = now < until;
+    if (on) {
+      const ms = now - t0;
+      if (ms < 0) moving = true;                                  // the drawer is not far enough out yet
+      else if (!reduce && k < .996) { k += (1 - k) * (1 - Math.exp(-dt / 90)); moving = true; }   // it comes up evenly, no flicker
+      else k = 1;
+    } else if (k > .004) { k *= Math.exp(-dt / 55); moving = true; }
+    else k = 0;
+
+    if (gl && w && h) {
+      findLeaves();
+      gl.uniform2f(U.uRes, w, h);
+      gl.uniform1f(U.uDpr, cv.width / w);
+      gl.uniform3f(U.uLamp, w / 2, -S.lh * .3, S.lh * 5);
+      gl.uniform1f(U.uLevel, k * LAMPS[S.lamp]);
+      gl.uniform1f(U.uLh, S.lh);
+      gl.uniform3f(U.uWell, DRAWER_WALL, w - DRAWER_WALL, h - DRAWER_FRONT);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    if (moving) raf = requestAnimationFrame(frame);
+  }
+  // Nothing is drawn while nothing changes; callers say for how long things will move.
+  function wake(ms = 0) {
+    until = Math.max(until, performance.now() + ms);
+    if (!raf) raf = requestAnimationFrame(frame);
+  }
+
+  well.addEventListener('scroll', () => wake(), { passive: true });   // the sheets move under the light
+  for (const type of ['pointerover', 'pointerout', 'focusin', 'focusout']) {
+    pile.addEventListener(type, () => wake(450));                     // ... and slide when one is drawn out
+  }
+
+  // The light at a point of the screen, as a colour to multiply paper by: the same sum
+  // as the shader's, for a sheet held in the hand, which is not under the canvas.
+  const at = (x, y) => 'rgb(' + rgb(x, y).join(',') + ')';
+  function rgb(x, y) {
+    const box = cv.getBoundingClientRect();
+    const px = x - box.left, py = y - box.top;
+    const lx = w / 2 - px, ly = -S.lh * .3 - py, lz = S.lh * 4.2;       // in the hand: a little nearer the bulb
+    const d = Math.hypot(lx, ly, lz);
+    // the beam's axis is (0, sin TILT, -cos TILT); the ray from the bulb to this point is (-lx, -ly, -lz) / d
+    const ct = (lz * Math.cos(TILT) - ly * Math.sin(TILT)) / d;
+    const lo = Math.cos(OUTER), hi = Math.cos(INNER);
+    let hood = Math.max(0, Math.min(1, (ct - lo) / (hi - lo)));
+    hood = hood * hood * (3 - 2 * hood);
+    const level = k * LAMPS[S.lamp];
+    const lit = level * EXPOSURE * Math.pow(Math.max(ct, 0), FOCUS) * hood * (lz / d) * lz * lz / (d * d);
+    const inside = px > 0 && px < w && py > 0 && py < h;
+    const fill = level * (inside ? .2 * (1 - .4 * py / h) : .06);
+    const warm = [1, .62 + .18 * hood, .34 + .22 * hood], back = [1, .72, .46], dusk = [.289, .278, .316];
+    return dusk.map((v, i) => Math.round(255 * (1 - Math.exp(-(v + warm[i] * lit + back[i] * fill)))));
+  }
+
+  return {
+    init, size, wake, at, rgb,
+    shape: { TILT, OUTER, INNER, FOCUS, EXPOSURE },
+    level: () => k * LAMPS[S.lamp],
+    set(v) {
+      on = v;
+      if (v) t0 = reduce ? -1e9 : performance.now() + 400;      // on once the drawer is part of the way out
+      wake(450);
+    },
+  };
+})();
+
+// Paper that is screwed up into a ball, thrown, and smoothed out again.
+//
+// The sheet is a fine mesh of points that keep their distance from their neighbours,
+// the way paper does: it will fold but not stretch. To crumple it, the room it has is
+// shrunk around it, a closing hand, and it has to buckle and fold to fit. Unlike cloth
+// it does not bend just anywhere: it stays in flat pieces and breaks along the lines
+// between them, one line after another. Which lines give, when, and which way they
+// fold is not scripted, it falls out of that. The result is drawn with WebGL, every
+// pixel lit by the drawer's lamp with the same sums as the drawer itself, so it
+// belongs to the same picture. The ball lying on the floor afterwards is that mesh
+// as it ended up.
+const paperFx = (() => {
+  const COLS = 64, ROWS = 29, N = COLS * ROWS;
+  const GX = 12, GY = 5, PIECES = GX * GY;               // the flat pieces a sheet breaks up into when it is crumpled
+  const FRAMES = 66, SETTLE = 6, SUB = 3, ITER = 5;      // the crumpling, as recorded: frames, of which the last settle
+  const BALL = .118;                                     // the ball's radius where it is widest, the sheet's width being 1
+  const PLATE = .8, LOOSE = .02, SOFT = .08;             // how hard it is to bend: a piece (or a line not yet creased), a crease, a piece that gave
+  const EARLY = .99, LATE = .95, BUCKLE = .9;            // how far a line bends before it gives, the first and the last of them, and a piece (the cosine of half the angle)
+  const sims = new Map(), balls = new Map();
+  const actors = [];
+  let raf = 0;
+
+  // the sheet as triangles; the diagonal runs now one way, now the other, so the folds have no grain
+  const IDS = new Uint16Array((COLS - 1) * (ROWS - 1) * 6);
+  for (let j = 0, t = 0; j + 1 < ROWS; j++) for (let i = 0; i + 1 < COLS; i++, t += 6) {
+    const k = j * COLS + i;
+    IDS.set((i + j) % 2 ? [k, k + 1, k + COLS, k + 1, k + COLS + 1, k + COLS] : [k, k + 1, k + COLS + 1, k, k + COLS + 1, k + COLS], t);
+  }
+
+  /* ---- the paper itself ---- */
+  function simOf(seed, aspect) {
+    const key = seed + '|' + aspect.toFixed(3);
+    if (sims.has(key)) return sims.get(key);
+    if (sims.size >= 6) sims.delete(sims.keys().next().value);
+    const p = new Float64Array(N * 3), q = new Float64Array(N * 3);
+    const dx = 1 / (COLS - 1), dy = aspect / (ROWS - 1), r = n => hash(seed, n);
+    // smooth noise over the sheet, 0 to 1: patches "cell" points across
+    const patch = (i, j, cell, salt) => {
+      const x = i / cell, y = j / cell, x0 = Math.floor(x), y0 = Math.floor(y);
+      let fx = x - x0, fy = y - y0;
+      fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+      const h = (a, b) => r(salt + a * 131 + b * 7919);
+      return (h(x0, y0) * (1 - fx) + h(x0 + 1, y0) * fx) * (1 - fy) + (h(x0, y0 + 1) * (1 - fx) + h(x0 + 1, y0 + 1) * fx) * fy;
+    };
+    // Paper does not drape the way cloth does. It stays flat, or bows a little, until it
+    // gives, and then it gives all at once along a line and stays creased there. Where the
+    // lines can come is settled beforehand: points are scattered over the sheet, each
+    // gathers the paper nearest to it into a piece, and the lines run between the pieces.
+    const site = new Float32Array(PIECES * 2);
+    for (let c = 0; c < PIECES; c++) {
+      const gx = c % GX, gy = (c - gx) / GX;
+      site[c * 2] = (gx + .5 + (r(700 + c) - .5) * .92) / GX - .5;
+      site[c * 2 + 1] = ((gy + .5 + (r(800 + c) - .5) * .92) / GY - .5) * aspect;
+    }
+    // Where the hand lets each part of the sheet be: some pieces are pressed in deep and
+    // some stay out. The sheet also starts off very slightly uneven, each piece its own
+    // way, so that it folds to both sides and not into a bowl.
+    const piece = new Uint8Array(N), room = new Float64Array(N);
+    for (let j = 0; j < ROWS; j++) for (let i = 0; i < COLS; i++) {
+      const n = j * COLS + i, k = n * 3, x = i * dx - .5, y = j * dy - aspect / 2;
+      let best = 1e9, c = 0;
+      for (let s = 0; s < PIECES; s++) {
+        const d = (site[s * 2] - x) ** 2 + (site[s * 2 + 1] - y) ** 2;
+        if (d < best) { best = d; c = s; }
+      }
+      piece[n] = c;
+      p[k] = x; p[k + 1] = y;
+      p[k + 2] = .03 * (patch(i, j, COLS / 5, 300000) - .5) * 2 + .003 * (r(900 + c) - .5) * 2;
+      room[n] = .46 + .54 * (.55 * r(1000 + c) + .45 * patch(i, j, COLS / 9, 500000));
+    }
+    q.set(p);
+    // What holds it together: each point to its neighbours and across the diagonals, so
+    // that it neither stretches nor shears ...
+    const A = [], B = [], REST = [], STIFF = [];
+    const link = (a, b, stiff) => {
+      A.push(a); B.push(b); STIFF.push(stiff);
+      REST.push(Math.hypot(p[a * 3] - p[b * 3], p[a * 3 + 1] - p[b * 3 + 1]));
+    };
+    // ... and each point to the next but one, which is what keeps it from bending. Within a
+    // piece that holds; across a line between two pieces it holds until the line gives.
+    const BA = [], BB = [], BREST = [], BLINE = [], lines = new Map();
+    const bend = (a, mid, b) => {
+      const ca = piece[a], cm = piece[mid], cb = piece[b];
+      let line = -1;
+      if (ca !== cm || cm !== cb) {
+        const o = ca !== cb ? cb : cm, id = Math.min(ca, o) * PIECES + Math.max(ca, o);
+        if (!lines.has(id)) lines.set(id, lines.size);
+        line = lines.get(id);
+      }
+      BA.push(a); BB.push(b); BLINE.push(line);
+      BREST.push(Math.hypot(p[a * 3] - p[b * 3], p[a * 3 + 1] - p[b * 3 + 1]));
+    };
+    for (let j = 0; j < ROWS; j++) for (let i = 0; i < COLS; i++) {
+      const a = j * COLS + i;
+      if (i + 1 < COLS) link(a, a + 1, 1);
+      if (j + 1 < ROWS) link(a, a + COLS, 1);
+      if (i + 1 < COLS && j + 1 < ROWS) { link(a, a + COLS + 1, .7); link(a + 1, a + COLS, .7); }
+      if (i + 2 < COLS) bend(a, a + 1, a + 2);
+      if (j + 2 < ROWS) bend(a, a + COLS, a + 2 * COLS);
+      if (i + 2 < COLS && j + 2 < ROWS) { bend(a, a + COLS + 1, a + 2 * COLS + 2); bend(a + 2, a + COLS + 1, a + 2 * COLS); }
+    }
+    const M = A.length, MB = BA.length, R0 = Math.hypot(.5, aspect / 2) * 1.03;
+    const A_ = Int32Array.from(A), B_ = Int32Array.from(B), REST_ = Float64Array.from(REST), STIFF_ = Float64Array.from(STIFF);
+    const BA_ = Int32Array.from(BA), BB_ = Int32Array.from(BB), BREST_ = Float64Array.from(BREST), BLINE_ = Int32Array.from(BLINE);
+    // some lines give at the first push, most hold out longer: a sheet gets a few long
+    // creases first and the small ones after
+    const whole = new Uint8Array(lines.size).fill(1), gave = new Uint8Array(MB), limit = new Float32Array(lines.size);
+    for (const [id, n] of lines) limit[n] = EARLY + (LATE - EARLY) * Math.pow(r(1100 + id), .6);
+    // the hand is not a sphere, and no two close alike
+    const ex = 1.02 + .16 * r(11), ey = .9 + .14 * r(12), ez = .86 + .14 * r(13);
+
+    const flat = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) { flat[i * 3] = p[i * 3]; flat[i * 3 + 1] = p[i * 3 + 1]; }
+    const frames = [flat];
+
+    function step() {
+      const f = frames.length;
+      let t = Math.min(1, f / (FRAMES - SETTLE));
+      t = t * t * (3 - 2 * t);
+      const R = R0 + (BALL - R0) * t, grip = Math.min(1, t * 3);
+      for (let sub = 0; sub < SUB; sub++) {
+        for (let i = 0; i < N * 3; i++) {                 // it carries on moving, but not far: paper has no swing in it
+          const v = (p[i] - q[i]) * .5;
+          q[i] = p[i];
+          p[i] += v;
+        }
+        for (let it = 0; it < ITER; it++) {
+          for (let c = 0; c < M; c++) {
+            const a = A_[c] * 3, b = B_[c] * 3;
+            const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+            const len = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1e-9;
+            const g = (len - REST_[c]) / len * .5 * STIFF_[c];
+            p[a] += ux * g; p[a + 1] += uy * g; p[a + 2] += uz * g;
+            p[b] -= ux * g; p[b + 1] -= uy * g; p[b + 2] -= uz * g;
+          }
+          for (let c = 0; c < MB; c++) {
+            const a = BA_[c] * 3, b = BB_[c] * 3, line = BLINE_[c];
+            const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+            const len = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1e-9;
+            const g = (len - BREST_[c]) / len * .5 * (line < 0 ? (gave[c] ? SOFT : PLATE) : whole[line] ? PLATE : LOOSE);
+            p[a] += ux * g; p[a + 1] += uy * g; p[a + 2] += uz * g;
+            p[b] -= ux * g; p[b + 1] -= uy * g; p[b + 2] -= uz * g;
+          }
+          for (let i = 0, n = 0; i < N * 3; i += 3, n++) {      // ... and nothing may be outside the closing hand
+            const x = p[i] / ex, y = p[i + 1] / ey, z = p[i + 2] / ez, len = Math.sqrt(x * x + y * y + z * z);
+            // (the dents come in as it closes, early: the fingers are what it meets first)
+            const lim = R * (1 - (1 - room[n]) * grip);
+            if (len > lim) { const g = lim / len; p[i] *= g; p[i + 1] *= g; p[i + 2] *= g; }
+          }
+        }
+        // What has been bent too far gives: a line all along its length, at once, which is
+        // the jerk in the way paper crumples. A piece only where it is bent.
+        for (let c = 0; c < MB; c++) {
+          const line = BLINE_[c];
+          if (line < 0 ? gave[c] : !whole[line]) continue;
+          const a = BA_[c] * 3, b = BB_[c] * 3;
+          const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], len = Math.sqrt(ux * ux + uy * uy + uz * uz);
+          if (line < 0) { if (len < BREST_[c] * BUCKLE) gave[c] = 1; } else if (len < BREST_[c] * limit[line]) whole[line] = 0;
+        }
+      }
+      const out = new Float32Array(p);
+      const ease = Math.min(1, f / 6);                    // it comes up out of the flat sheet, quickly
+      if (ease < 1) for (let i = 2; i < N * 3; i += 3) out[i] *= ease;
+      frames.push(out);
+    }
+    // which piece each triangle belongs to, if it is all in one
+    const tri = new Int16Array(IDS.length / 3);
+    for (let t = 0; t < tri.length; t++) {
+      const a = piece[IDS[t * 3]], b = piece[IDS[t * 3 + 1]], c = piece[IDS[t * 3 + 2]];
+      tri[t] = a === b && b === c ? a : -1;
+    }
+    const sim = {
+      frames, aspect, site, tri,
+      upTo(f) { while (frames.length <= f && frames.length <= FRAMES) step(); },
+      get last() { this.upTo(FRAMES); return frames[FRAMES]; },
+      get done() { return frames.length > FRAMES; },
+    };
+    sims.set(key, sim);
+    return sim;
+  }
+
+  /* ---- drawing it ---- */
+  const L = drawerLight.shape;
+  const VERT = `
+attribute vec3 aPos;      // on the screen, css px; z towards the eye
+attribute vec3 aNor;      // the way the paper faces there, taken over its neighbourhood
+attribute vec2 aUv;
+uniform vec2 uRes;
+varying vec3 vP;
+varying vec3 vN;
+varying vec2 vUv;
+void main() {
+  vP = aPos; vN = aNor; vUv = aUv;
+  gl_Position = vec4(aPos.x / uRes.x * 2. - 1., 1. - aPos.y / uRes.y * 2., -aPos.z / 3000., 1.);
+}`;
+  const FRAG = `
+#extension GL_OES_standard_derivatives : enable
+precision highp float;
+uniform sampler2D uTex;   // the face of the sheet
+uniform vec3 uLamp;       // the drawer's bulb: x, y on the screen and its height above the pile
+uniform float uLevel;
+uniform float uFill;      // light thrown back by the inside of the drawer, where the paper is over it
+uniform vec4 uSpill;      // light spilling out of the lit drawer over the floor: the way to it, and how much
+uniform vec3 uCentre;     // the middle of the ball
+uniform float uRadius;    // ... and its radius, px
+uniform float uCrumple;   // 0 a flat sheet, 1 a ball
+uniform float uLift;      // how far the paper is above the pile
+uniform vec2 uSite[${PIECES}];    // the points the sheet's flat pieces are gathered round, the sheet's width being 1
+uniform vec3 uPiece[${PIECES}];   // ... and the way each piece faces; shorter, the less flat the piece still is
+uniform float uAspect;
+varying vec3 vP;
+varying vec3 vN;
+varying vec2 vUv;
+
+const float TILT = ${L.TILT.toFixed(3)};
+const float OUTER = ${L.OUTER.toFixed(3)};
+const float INNER = ${L.INNER.toFixed(3)};
+const float FOCUS = ${L.FOCUS.toFixed(3)};
+const float EXPOSURE = ${L.EXPOSURE.toFixed(3)};
+const vec3 AMBIENT = vec3(0.289, 0.278, 0.316);
+${GLSL_NOISE}
+void main() {
+  // Which way the paper faces under this pixel, turned towards the eye. First as the
+  // mesh has it: the triangle it is in, softened by the lie of the paper round it.
+  vec3 facet = -normalize(cross(dFdx(vP), dFdy(vP)));
+  if (facet.z < 0.) facet = -facet;
+  vec3 soft = normalize(vN);
+  if (dot(soft, facet) < 0.) soft = -soft;
+  vec3 n = normalize(mix(facet, soft, .7));
+  // Then as paper has it: flat all over a piece, and changing at a stroke at the crease
+  // where the next piece begins. The creases are worked out here, for every pixel, so
+  // they are straight and sharp however coarse the mesh under them is.
+  vec2 s = vec2(vUv.x - .5, (vUv.y - .5) * uAspect);
+  float d1 = 1e9, d2 = 1e9;
+  vec2 s1 = vec2(0.), s2 = vec2(1.);
+  vec3 level = vec3(0.);
+  for (int i = 0; i < ${PIECES}; i++) {
+    vec2 v = uSite[i] - s;
+    float d = dot(v, v);
+    if (d < d1) { d2 = d1; s2 = s1; d1 = d; s1 = uSite[i]; level = uPiece[i]; }
+    else if (d < d2) { d2 = d; s2 = uSite[i]; }
+  }
+  float edge = dot(.5 * (s1 + s2) - s, normalize(s2 - s1));      // how far it is to the crease
+  float px = length(fwidth(s));
+  float held = length(level);
+  level /= max(held, 1e-4);
+  if (dot(level, facet) < 0.) level = -level;
+  // (a piece that has buckled after all, or that the mesh has lying another way here, is left as the mesh has it)
+  float sure = smoothstep(.5, .9, held) * smoothstep(.2, .75, dot(level, facet)) * smoothstep(0., 1.5 * px, edge);
+  n = normalize(mix(n, level, .8 * sure));
+  vec2 q = vUv * vec2(920., 420.);                       // the tooth of the paper
+  vec2 cell = mod(floor(q / 1.5), vec2(8192., 3200.));
+  n = normalize(n + vec3((vec2(hash(cell), hash(cell + 71.3)) - .5) * .09, 0.));
+
+  vec3 toLamp = vec3(uLamp.xy - vP.xy, uLamp.z - vP.z - uLift);
+  float d = length(toLamp);
+  vec3 l = toLamp / d;
+  vec3 axis = vec3(0., sin(TILT), -cos(TILT));
+  float ct = dot(-l, axis);
+  float hood = smoothstep(cos(OUTER), cos(INNER), ct);
+  float beam = pow(max(ct, 0.), FOCUS);
+  float reach = uLevel * EXPOSURE * beam * hood * (uLamp.z * uLamp.z) / (d * d);
+
+  // A crumpled sheet is in its own way: the side of the ball away from the bulb is in
+  // shadow, and the hollows between the folds are dark whatever side they are on.
+  vec3 out3 = vP - uCentre;
+  float deep = length(out3) / uRadius;
+  float hollow = mix(1., smoothstep(.2, 1.05, deep), uCrumple * .8);
+  float lee = mix(1., smoothstep(-.55, .3, dot(normalize(out3 + vec3(0., 0., 1e-4)), l)), uCrumple * .85);
+
+  float direct = reach * max(dot(n, l), 0.) * lee * hollow;
+  float through = reach * max(dot(-n, l), 0.) * .16 * hollow;       // paper lets a little light through
+  // dusk is not even either: there is a little more of it from the upper left
+  vec3 dusk = AMBIENT * (.72 + .5 * max(dot(n, normalize(vec3(-.35, -.5, .8))), 0.)) * hollow;
+  float spill = uSpill.w * (.12 + .88 * max(dot(n, uSpill.xyz), 0.)) * hollow;
+
+  vec3 warm = mix(vec3(1., .62, .34), vec3(1., .80, .56), hood);
+  vec3 c = dusk + warm * (direct + through) + vec3(1., .72, .46) * (uFill * hollow + spill);
+  c = 1. - exp(-c);
+
+  vec3 paper = gl_FrontFacing ? vec3(.961, .929, .859) * .95 : texture2D(uTex, vUv).rgb;
+  gl_FragColor = vec4(paper * c, 1.);
+}`;
+  // the shadow it throws on what is under it: a soft dark disc
+  const SH_VERT = `
+attribute vec2 aPos;
+uniform vec2 uRes;
+uniform vec3 uAt;         // centre and radius, css px
+varying vec2 vQ;
+void main() {
+  vQ = aPos;
+  vec2 p = uAt.xy + aPos * uAt.z;
+  gl_Position = vec4(p.x / uRes.x * 2. - 1., 1. - p.y / uRes.y * 2., .99, 1.);
+}`;
+  const SH_FRAG = `
+precision mediump float;
+uniform float uDark;
+varying vec2 vQ;
+void main() { gl_FragColor = vec4(0., 0., 0., uDark * smoothstep(1., .15, length(vQ))); }`;
+
+  function Renderer(canvas) {
+    let gl;
+    try {
+      gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: true, depth: true });
+      if (!gl || !gl.getExtension('OES_standard_derivatives')) return null;
+    } catch { return null; }
+    const program = (vs, fs, names) => {
+      const prog = gl.createProgram();
+      for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+        gl.attachShader(prog, sh);
+      }
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      const U = {};
+      for (const n of names) U[n] = gl.getUniformLocation(prog, n);
+      return { prog, U };
+    };
+    let mesh, shade;
+    try {
+      mesh = program(VERT, FRAG, ['uRes', 'uTex', 'uLamp', 'uLevel', 'uFill', 'uSpill', 'uCentre', 'uRadius', 'uCrumple', 'uLift', 'uSite', 'uPiece', 'uAspect']);
+      shade = program(SH_VERT, SH_FRAG, ['uRes', 'uAt', 'uDark']);
+    } catch (err) {
+      console.warn('Typelight: crumpled paper cannot be drawn here.', err);
+      return null;
+    }
+    const pos = gl.createBuffer(), nor = gl.createBuffer(), uv = gl.createBuffer(), idx = gl.createBuffer(), quad = gl.createBuffer();
+    const uvs = new Float32Array(N * 2), ids = IDS;
+    for (let k = 0; k < N; k++) { uvs[k * 2] = (k % COLS) / (COLS - 1); uvs[k * 2 + 1] = Math.floor(k / COLS) / (ROWS - 1); }
+    gl.bindBuffer(gl.ARRAY_BUFFER, uv); gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ids, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, pos); gl.bufferData(gl.ARRAY_BUFFER, N * 12, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, nor); gl.bufferData(gl.ARRAY_BUFFER, N * 12, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(0, 0, 0, 0);
+    const textures = new WeakMap();
+    const W = new Float32Array(N * 3), NR = new Float32Array(N * 3), PN = new Float32Array(PIECES * 3), PM = new Float32Array(PIECES);
+    let cw = 1, ch = 1;
+
+    return {
+      canvas,
+      size(w, h, k) {
+        cw = w; ch = h;
+        const pw = Math.round(w * k), ph = Math.round(h * k);
+        if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+        gl.viewport(0, 0, pw, ph);
+      },
+      clear() { gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); },
+      shadow(x, y, r, dark) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.useProgram(shade.prog);
+        const at = gl.getAttribLocation(shade.prog, 'aPos');
+        gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+        gl.enableVertexAttribArray(at);
+        gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform2f(shade.U.uRes, cw, ch);
+        gl.uniform3f(shade.U.uAt, x, y, r);
+        gl.uniform1f(shade.U.uDark, dark);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      },
+      // a: an actor (see below); its points are worked out here and handed to the GPU
+      mesh(a) {
+        const sim = a.sim, f = Math.max(0, Math.min(FRAMES, a.c * FRAMES)), f0 = Math.floor(f), f1 = Math.min(FRAMES, f0 + 1), mix = f - f0;
+        sim.upTo(f1);
+        const P0 = sim.frames[f0], P1 = sim.frames[f1];
+        const lean = a.lean * (1 - a.c), cl = Math.cos(lean), sl = Math.sin(lean), M = a.M, sc = a.scale;
+        for (let i = 0; i < N * 3; i += 3) {
+          let x = P0[i] + (P1[i] - P0[i]) * mix, y = P0[i + 1] + (P1[i + 1] - P0[i + 1]) * mix, z = P0[i + 2] + (P1[i + 2] - P0[i + 2]) * mix;
+          [x, y] = [x * cl - y * sl, x * sl + y * cl];
+          if (M) [x, y, z] = [M[0] * x + M[1] * y + M[2] * z, M[3] * x + M[4] * y + M[5] * z, M[6] * x + M[7] * y + M[8] * z];
+          W[i] = a.x + x * sc; W[i + 1] = a.y + y * sc; W[i + 2] = z * sc;
+        }
+        // each point's normal: the sum of the normals of the facets round it. And each
+        // piece's: the sum over its own facets, against what that would come to if they
+        // all lay the same way.
+        NR.fill(0); PN.fill(0); PM.fill(0);
+        const tri = sim.tri;
+        for (let t = 0; t < ids.length; t += 3) {
+          const i0 = ids[t] * 3, i1 = ids[t + 1] * 3, i2 = ids[t + 2] * 3;
+          const ax = W[i1] - W[i0], ay = W[i1 + 1] - W[i0 + 1], az = W[i1 + 2] - W[i0 + 2];
+          const bx = W[i2] - W[i0], by = W[i2 + 1] - W[i0 + 1], bz = W[i2 + 2] - W[i0 + 2];
+          const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+          NR[i0] += nx; NR[i0 + 1] += ny; NR[i0 + 2] += nz;
+          NR[i1] += nx; NR[i1 + 1] += ny; NR[i1 + 2] += nz;
+          NR[i2] += nx; NR[i2 + 1] += ny; NR[i2 + 2] += nz;
+          const c = tri[t / 3];
+          if (c >= 0) { PN[c * 3] += nx; PN[c * 3 + 1] += ny; PN[c * 3 + 2] += nz; PM[c] += Math.sqrt(nx * nx + ny * ny + nz * nz); }
+        }
+        for (let c = 0; c < PIECES; c++) { const k = 1 / (PM[c] || 1); PN[c * 3] *= k; PN[c * 3 + 1] *= k; PN[c * 3 + 2] *= k; }
+        gl.enable(gl.DEPTH_TEST);
+        gl.useProgram(mesh.prog);
+        const aPos = gl.getAttribLocation(mesh.prog, 'aPos'), aNor = gl.getAttribLocation(mesh.prog, 'aNor'), aUv = gl.getAttribLocation(mesh.prog, 'aUv');
+        gl.bindBuffer(gl.ARRAY_BUFFER, pos);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, W);
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, nor);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, NR);
+        gl.enableVertexAttribArray(aNor);
+        gl.vertexAttribPointer(aNor, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, uv);
+        gl.enableVertexAttribArray(aUv);
+        gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idx);
+        let tex = textures.get(a.face);
+        if (!tex) {
+          tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, a.face);
+          gl.generateMipmap(gl.TEXTURE_2D);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          textures.set(a.face, tex);
+        }
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        const U = mesh.U, lamp = a.lamp, level = a.level;
+        gl.uniform2f(U.uRes, cw, ch);
+        gl.uniform1i(U.uTex, 0);
+        gl.uniform3f(U.uLamp, lamp[0], lamp[1], lamp[2]);
+        gl.uniform1f(U.uLevel, level);
+        gl.uniform1f(U.uFill, a.fill * level);
+        gl.uniform4f(U.uSpill, a.spill[0], a.spill[1], a.spill[2], a.spill[3] * level);
+        gl.uniform3f(U.uCentre, a.x, a.y, 0);
+        gl.uniform1f(U.uRadius, BALL * sc);
+        gl.uniform1f(U.uCrumple, Math.max(0, Math.min(1, (a.c - .45) / .5)));
+        gl.uniform1f(U.uLift, a.lift);
+        gl.uniform2fv(U.uSite, sim.site);
+        gl.uniform3fv(U.uPiece, PN);
+        gl.uniform1f(U.uAspect, sim.aspect);
+        gl.drawElements(gl.TRIANGLES, ids.length, gl.UNSIGNED_SHORT, 0);
+      },
+    };
+  }
+
+  const stage = Renderer($('fx'));                       // where a sheet is seen being crumpled
+  const bench = stage && Renderer(document.createElement('canvas'));   // where the balls for the floor are made
+  const ok = !!(stage && bench);
+
+  // The face of a sheet as a picture: the paper and its first lines, as it lies in the drawer.
+  // 1024 by 512 whatever the sheet's size, so the GPU can make smaller copies of it for the ball.
+  function face(sheet, w, h) {
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 512;
+    const g = c.getContext('2d');
+    g.scale(1024 / w, 512 / h);
+    g.fillStyle = '#f5eddb';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#1c1713';
+    g.textBaseline = 'alphabetic';
+    const mx = S.margin * S.chw, cols = Math.max(8, S.cols);
+    g.font = 'italic 13px "Courier Prime", "Courier New", Courier, monospace';
+    g.globalAlpha = .7;
+    g.textAlign = 'right';
+    g.fillText(sheet.note || '', w - mx, S.lh * .3 + 11);
+    g.globalAlpha = 1;
+    g.textAlign = 'left';
+    g.font = `${S.fs}px "Courier Prime", "Courier New", Courier, monospace`;
+    let row = 0;
+    const put = line => { if (row < 12) g.fillText(line, mx, S.lh * (.95 + row) + S.lh * .5 + S.fs * .3); row++; };
+    for (const para of sheet.text.slice(0, 900).split('\n')) {
+      let line = '';
+      for (const word of para.split(' ')) {
+        if (line && line.length + 1 + word.length > cols) { put(line); line = word; }
+        else line = line ? line + ' ' + word : word;
+      }
+      put(line);
+      if (row >= 12) break;
+    }
+    return c;
+  }
+
+  /* ---- light, and turning in space ---- */
+  // The light an actor is in where it is now: the bulb, what the drawer throws back if
+  // the paper is over it, and what spills out of the lit drawer if it is beside it.
+  function lightAt(a) {
+    a.lamp = [S.dl + S.dw / 2, S.vh - S.drop - S.lh * .3, S.lh * 5];
+    a.level = drawerLight.level();
+    const top = S.vh - S.drop, inside = a.x > S.dl && a.x < S.dl + S.dw && a.y > top && a.y < S.vh - S.hud;
+    a.fill = inside ? .2 * (1 - .4 * (a.y - top) / Math.max(1, S.drop)) : 0;
+    // beside the drawer: its lit inside is a broad, weak lamp of its own
+    const cx = S.dl + S.dw / 2, cy = top + S.drop * .45, dx = cx - a.x, dy = cy - a.y, d = Math.hypot(dx, dy) || 1, h = S.lh * 6;
+    const n = Math.hypot(d, h);
+    a.spill = [dx / n, dy / n, h / n, inside ? 0 : .8 / (1 + (d / (S.dw * .75)) ** 2)];
+  }
+  // a turn by "angle" about an axis lying in the plane of the screen: how a ball rolls
+  function turn(spin, angle) {
+    const { ax, ay } = spin, c = Math.cos(angle), n = Math.sin(angle), C = 1 - c;
+    return [c + ax * ax * C, ax * ay * C, ay * n,  ax * ay * C, c + ay * ay * C, -ax * n,  -ay * n, ax * n, c];
+  }
+  const lerp = (a, b, t) => a + (b - a) * t, ease = t => t * t * (3 - 2 * t);
+  const kOf = () => Math.min(window.devicePixelRatio || 1, 2);
+
+  /* ---- the stage ---- */
+  function frame() {
+    raf = 0;
+    if (!actors.length) { $('fx').style.display = 'none'; return; }
+    stage.size(S.vw, S.vh, kOf());
+    stage.clear();
+    for (const a of actors) {
+      if (a.c > .55) {                        // off the pile, it throws a shadow; higher up, a wider and fainter one
+        const up = a.lift / 120, r = BALL * a.scale * (1.5 + .5 * up);
+        stage.shadow(a.x + 6 + 24 * up, a.y + 10 + 32 * up, r, .6 * Math.min(1, (a.c - .55) / .35) * (1 - .4 * Math.min(1, up)));
+      }
+    }
+    for (const a of actors) stage.mesh(a);
+    raf = requestAnimationFrame(frame);
+  }
+  function show(a) {
+    actors.push(a);
+    $('fx').style.display = 'block';
+    if (!raf) raf = requestAnimationFrame(frame);
+  }
+  const leave = a => { const i = actors.indexOf(a); if (i >= 0) actors.splice(i, 1); };
+  const tween = (ms, step) => new Promise(done => {
+    const t0 = performance.now();
+    const tick = now => {
+      const t = Math.min(1, Math.max(0, (now - t0) / ms));
+      step(t);
+      if (t < 1) requestAnimationFrame(tick); else done();
+    };
+    requestAnimationFrame(tick);
+  });
+  const actor = (sheet, w, h) => ({ sim: simOf(sheet.seed, h / w), face: face(sheet, w, h), c: 0, x: 0, y: 0, scale: w, lean: 0, M: null, lift: 0 });
+  const onFloor = size => size / (2 * BALL * .92);       // px per sheet width, for a ball "size" px across
+  // Working out how a sheet crumples takes a moment. Where nothing is waiting to be shown,
+  // it is done a little at a time, so the page does not stop for it.
+  const ready = async sim => { while (!sim.done) { sim.upTo(sim.frames.length + 1); await new Promise(r => setTimeout(r, 0)); } };
+
+  /* ---- the movements ---- */
+  // Screws a sheet up where the hand holds it, throws the ball to where it will lie, and
+  // lets it roll the last bit. from: the sheet as it is now {x, y, w, h, lean}; hand and to:
+  // points; size: the ball's width on the floor; spin: how it will have turned by then.
+  async function crumple(sheet, from, hand, to, size, spin) {
+    const a = actor(sheet, from.w, from.h);
+    Object.assign(a, { x: from.x, y: from.y, lean: from.lean });
+    lightAt(a);
+    show(a);
+    ready(a.sim);                             // the sum runs ahead of the picture, between the frames
+    await tween(1000, t => {
+      a.c = t + .045 * Math.sin(6 * Math.PI * t);         // the hand closes in three squeezes, not in one even movement
+      a.x = lerp(from.x, hand.x, ease(t)); a.y = lerp(from.y, hand.y, ease(t));
+      a.lift = 50 * ease(t);                  // the hand brings it up off the pile
+      lightAt(a);
+    });
+    const far = Math.hypot(to.x - hand.x, to.y - hand.y) || 1, ux = (to.x - hand.x) / far, uy = (to.y - hand.y) / far;
+    const land = { x: to.x - ux * Math.min(26, far * .5), y: to.y - uy * Math.min(26, far * .5) }, roll = .8;
+    const big = from.w, small = onFloor(size);            // down on the floor it is further from the eye
+    await tween(Math.min(680, 340 + far * .55), t => {
+      const up = Math.sin(Math.PI * t);
+      a.x = lerp(hand.x, land.x, t); a.y = lerp(hand.y, land.y, t);
+      a.lift = 50 * (1 - t) + 110 * up;
+      a.scale = lerp(big, small, t * t) * (1 + .12 * up);
+      a.M = turn(spin, (spin.angle - roll) * t);
+      lightAt(a);
+    });
+    await tween(360, t => {                    // it lands, hops once and rolls to rest
+      const e = 1 - (1 - t) * (1 - t);
+      a.x = lerp(land.x, to.x, e); a.y = lerp(land.y, to.y, e);
+      a.lift = 16 * Math.sin(Math.PI * t);
+      a.scale = small * (1 + .04 * Math.sin(Math.PI * t));
+      a.M = turn(spin, spin.angle - roll + roll * e);
+      lightAt(a);
+    });
+    leave(a);
+  }
+
+  // The other way: the ball comes up off the floor to where the sheet will lie, and opens.
+  async function smooth(sheet, from, size, spin, to) {
+    const a = actor(sheet, to.w, to.h);
+    const big = to.w, small = onFloor(size);
+    Object.assign(a, { c: 1, x: from.x, y: from.y, lean: to.lean, scale: small, M: turn(spin, spin.angle) });
+    await ready(a.sim);                        // it has to be crumpled again before it can be seen opening
+    lightAt(a);
+    show(a);
+    await tween(520, t => {
+      const e = ease(t), up = Math.sin(Math.PI * t);
+      a.x = lerp(from.x, to.x, e); a.y = lerp(from.y, to.y, e);
+      a.lift = 50 * e + 100 * up;
+      a.scale = lerp(small, big, e * e) * (1 + .1 * up);
+      a.M = turn(spin, spin.angle * (1 - e));
+      lightAt(a);
+    });
+    a.M = null;
+    await tween(900, t => { a.c = 1 - t; a.lift = 50 * (1 - ease(t)); lightAt(a); });
+    leave(a);
+  }
+
+  // The ball as it lies on the floor: a small picture. Working out how a sheet crumples
+  // takes a moment, so the picture is filled in when there is time for it.
+  function ball(sheet, size, spin, spot) {
+    const key = [sheet.id, size, Math.round(S.fs * 10), Math.round(spot.x), Math.round(spot.y), S.lamp].join('|');
+    if (balls.has(key)) return balls.get(key);
+    const c = document.createElement('canvas'), k = kOf(), box = size * 1.4;
+    c.width = c.height = Math.round(box * k);
+    if (balls.size > 40) balls.clear();
+    balls.set(key, c);
+    (async () => {
+      await new Promise(r => setTimeout(r, 0));
+      const a = actor(sheet, (S.cols + 2 * S.margin) * S.chw, S.lh * 12);
+      await ready(a.sim);
+      Object.assign(a, { c: 1, x: spot.x, y: spot.y, scale: onFloor(size), M: turn(spin, spin.angle) });
+      lightAt(a);
+      a.level = LAMPS[S.lamp];                 // the balls are only ever seen with the drawer out and its lamp on
+      a.x = a.y = box / 2;
+      bench.size(box, box, k * 2);             // drawn twice the size and brought down, which takes the jaggedness off the creases
+      bench.clear();
+      bench.mesh(a);
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(bench.canvas, 0, 0, c.width, c.height);
+    })();
+    return c;
+  }
+
+  return { ok, crumple, smooth, ball };
+})();
+
+const drawer = (() => {
+  const el = $('drawer'), well = $('well'), pile = $('pile'), binEl = $('bin'), btn = $('bDrawer'), hint = $('hint');
+  const BIN_MAX = 5, BIN_DAYS = 30;           // balls of paper kept on the floor, and for how long
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  let open = false;
+  let sheets = [], bin = [];                  // {id, text, at, title?}, top of the pile first; in the bin also {gone, side, fx, fy}
+  let pending = null, drag = null, busy = false, dragged = false;
+  let holdTimer = 0, scroller = 0, told = '', toldTimer = 0;
+  const flying = new Set();                   // balls still in the air: not on the floor yet
+  let naming = null;                          // the slip a name is being written on
+
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const seedOf = id => { let x = 7; for (let i = 0; i < id.length; i++) x = Math.imul(x, 31) + id.charCodeAt(i) | 0; return x & 0xffff; };
+  const esc = t => t.replace(/[&<>]/g, c => ESC[c]);
+  const pitch = () => S.lh * 2.1;             // from one sheet's top edge to the next, as in the stylesheet
+  const thick = new WeakMap();                // how many sheets each text fills, worked out once for the line length there is
+  function sheetsOf(sh) {
+    let t = thick.get(sh);
+    if (!t || t.text !== sh.text || t.cols !== S.cols || t.per !== S.per) thick.set(sh, t = { text: sh.text, cols: S.cols, per: S.per, n: pagesOf(sh.text) });
+    return t.n;
+  }
+  const noteOf = sh => day(sh.at) + ', ' + words((sh.text.match(/\S+/g) || []).length.toLocaleString('en-US')) +
+    (sheetsOf(sh) > 1 ? ', ' + sheetsOf(sh) + ' pages' : '');
+  // what the renderer of crumpled paper wants to know about a sheet
+  const paperOf = sh => ({ id: sh.id, seed: seedOf(sh.id), text: sh.text, note: noteOf(sh) });
+  function day(at) {
+    const d = new Date(at), opts = { day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString('en-GB', opts);
+  }
+
+  function load() {
+    if (DEMO) {
+      sheets = DEMO_SHEETS.map((text, i) => ({ id: 'demo' + i, text, at: Date.now() - (i * 6 + 2) * 864e5, ...(DEMO_NAMES[i] && { title: DEMO_NAMES[i] }) }));
+      return;
+    }
+    try {
+      const d = JSON.parse(store.get(PILE_KEY) || '{}');
+      const ok = x => x && typeof x.id === 'string' && typeof x.text === 'string';
+      if (Array.isArray(d.pile)) sheets = d.pile.filter(ok);
+      if (Array.isArray(d.bin)) bin = d.bin.filter(ok).filter(x => Date.now() - (x.gone || 0) < BIN_DAYS * 864e5).slice(0, BIN_MAX);
+    } catch { /* an empty drawer */ }
+  }
+  function save() {
+    if (!store.set(PILE_KEY, JSON.stringify({ v: 1, pile: sheets, bin }))) say('Could not save the drawer in this browser.', 8000);
+  }
+
+  /* ---- what is said in the controls while the drawer is out ---- */
+  function paintHint() {
+    hint.textContent = told || (!sheets.length ? 'Texts you put away lie here.'
+      : coarse ? 'Hold a text to pick it up. Move it, or pull it out sideways to throw it away.'
+      : 'Drag a text to move it. Pull it out sideways to throw it away.');
+  }
+  function say(msg, ms = 5000) {
+    told = msg;
+    clearTimeout(toldTimer);
+    toldTimer = setTimeout(() => { told = ''; paintHint(); }, ms);
+    paintHint();
+  }
+
+  /* ---- drawing it ---- */
+  // a paper clip, seen from the front: the wire goes round three times
+  const CLIP = '<svg class="clip" viewBox="0 0 14 38" aria-hidden="true"><path d="M4.5 10V28a3 3 0 0 0 6 0V6.5a4.5 4.5 0 0 0-9 0V31a5.5 5.5 0 0 0 11 0V13"/></svg>';
+  function leaf(sheet) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'leaf';
+    // no two lie quite square; a sheet keeps its own way of lying wherever it is in the pile
+    const seed = sheet ? seedOf(sheet.id) : 0;
+    const turn = +((hash(seed, 91) - .5) * 1.1).toFixed(2);
+    b.style.setProperty('--tilt', turn + 'deg');
+    b.style.setProperty('--dx', Math.round((hash(seed, 92) - .5) * 18) + 'px');
+    b.turn = turn * Math.PI / 180;      // for the drawer's lamp, which shades each sheet by itself
+    b.seed = seed % 97 + 1;
+    if (sheet) {
+      b.dataset.id = sheet.id;
+      const many = sheetsOf(sheet) > 1;
+      b.classList.toggle('thick', many);
+      b.innerHTML = `<span class="slip${sheet.title ? '' : ' blank'}">${esc(sheet.title || 'Name it')}</span>` +
+        (many || sheet.title ? CLIP : '') +
+        `<span class="note">${esc(noteOf(sheet))}</span>` +
+        `<span class="body">${esc(sheet.text.slice(0, 900))}</span>`;
+    } else {
+      b.innerHTML = '<span class="body"><span class="ghost">A blank sheet</span></span>';
+    }
+    return b;
+  }
+
+  // Where each ball lies. Beside the drawer if there is floor there; on a narrow screen
+  // in a row in front of it, and the drawer is that much shorter.
+  function spots() {
+    const room = Math.min(S.dl, S.vw - S.dl - S.dw);
+    const wide = room >= 110, size = wide ? 84 : 54;
+    const band = !wide && bin.length ? size + 12 : 0;
+    const top = S.vh - S.drop + 30, bottom = S.vh - S.hud - size - 8;
+    const seen = { left: 0, right: 0 };
+    return { band, size, at: bin.map((b, i) => {
+      if (!wide) return { x: 12 + i * (size + 10), y: S.vh - S.hud - size - 6 };
+      const j = seen[b.side]++;
+      const x0 = b.side === 'left' ? 10 : S.dl + S.dw + 10, x1 = (b.side === 'left' ? S.dl : S.vw) - 10 - size;
+      return { x: x0 + (x1 - x0) * b.fx, y: top + (j + .1 + .8 * b.fy) / BIN_MAX * (bottom - top) };
+    }) };
+  }
+  const SPIN = { ax: 1, ay: 0, angle: 4 };      // for a ball that does not remember how it rolled
+  function arrange() {
+    // (how many pages a text fills depends on how long a line is: the notes are written again)
+    for (const b of pile.children) {
+      const sh = b.dataset.id && sheets.find(x => x.id === b.dataset.id);
+      if (!sh) continue;
+      b.querySelector('.note').textContent = noteOf(sh);
+      if (b.classList.contains('thick') !== sheetsOf(sh) > 1) b.replaceWith(leaf(sh));
+    }
+    const sp = spots();
+    root.style.setProperty('--band', sp.band + 'px');
+    root.style.setProperty('--ball', sp.size + 'px');
+    binEl.textContent = '';
+    bin.forEach((b, i) => {
+      const e = document.createElement('button');
+      e.type = 'button';
+      e.className = 'ball' + (flying.has(b.id) ? ' pending' : '');
+      e.dataset.id = b.id;
+      e.title = `Thrown away on ${day(b.gone)}. Click to smooth it out and put it back in the drawer.`;
+      e.setAttribute('aria-label', e.title);
+      e.style.left = sp.at[i].x + 'px';
+      e.style.top = sp.at[i].y + 'px';
+      if (!paperFx.ok) e.classList.add('plain');
+      else if (S.lh) e.appendChild(paperFx.ball(paperOf(b), sp.size, b.spin || SPIN, { x: sp.at[i].x + sp.size / 2, y: sp.at[i].y + sp.size / 2 }));
+      binEl.appendChild(e);
+    });
+    drawerLight.size();                 // the drawer may have changed height
+    return sp;
+  }
+  function render() {
+    pile.textContent = '';
+    pile.appendChild(leaf(null));
+    for (const sh of sheets) pile.appendChild(leaf(sh));
+    const sp = arrange();
+    paintHint();
+    return sp;
+  }
+
+  /* ---- taking a sheet out, putting one away ---- */
+  // The sheet in the machine goes on top of the pile (a blank one is just dropped), and
+  // the chosen one, or a blank one, goes into the machine.
+  function swap(id) {
+    letGo();
+    const next = id ? sheets.find(x => x.id === id) : null;
+    if (id && !next) return;
+    persist();
+    if (next) sheets.splice(sheets.indexOf(next), 1);
+    const had = S.text.trim() !== '';
+    if (had) sheets.unshift({ id: uid(), text: S.text, at: S.at, ...(S.title && { title: S.title }) });
+    if (next || had) {
+      S.at = next ? next.at : Date.now();
+      S.title = next && next.title || '';
+      setText(next ? next.text : '');
+      persist();
+      save();
+      render();
+      snd.tick();
+    }
+    set(false);
+  }
+
+  function set(v) {
+    if (v === open) return;
+    if (v && spread.open) spread.set(false);
+    if (!v) { letGo(); if (naming) naming.blur(); }
+    open = v;
+    if (v) well.scrollTop = 0;
+    root.classList.toggle('drawer-open', v);
+    el.inert = binEl.inert = !v;
+    btn.setAttribute('aria-expanded', v);
+    btn.textContent = v ? 'Close drawer' : 'Drawer';
+    if (!v) ta.focus({ preventScroll: true });
+    drawerLight.set(v);
+    if (!reduce) snd.drawer(v, v ? .74 : .42);      // when it reaches its stop: as timed in the stylesheet
+    wake();
+  }
+
+  /* ---- giving a text a name ---- */
+  // The slip under the clip is written on where it lies. Enter or clicking elsewhere
+  // keeps the name, Escape leaves it as it was, and an empty slip takes the name away.
+  function name(b, viaKeys) {
+    const sh = sheets.find(x => x.id === b.dataset.id);
+    if (!sh || naming || busy) return;
+    letGo();
+    const slip = b.querySelector('.slip'), r = slip.getBoundingClientRect(), w = well.getBoundingClientRect();
+    const inp = document.createElement('input');
+    inp.className = 'slip-in';
+    inp.maxLength = 48;
+    inp.value = sh.title || '';
+    inp.placeholder = 'Name it';
+    inp.spellcheck = false;
+    inp.setAttribute('aria-label', 'Name of this text');
+    inp.style.left = r.left - w.left + well.scrollLeft + 'px';
+    inp.style.top = r.top - w.top + well.scrollTop + 'px';
+    inp.style.height = slip.offsetHeight + 'px';
+    slip.style.visibility = 'hidden';
+    well.appendChild(inp);
+    naming = inp;
+    const done = keep => {
+      if (naming !== inp) return;
+      naming = null;
+      const v = inp.value.trim().replace(/\s+/g, ' ');
+      inp.remove();
+      if (keep && v !== (sh.title || '')) {
+        if (v) sh.title = v; else delete sh.title;
+        save();
+      }
+      const top = well.scrollTop;
+      render();
+      well.scrollTop = top;
+      const again = [...pile.children].find(k => k.dataset.id === sh.id);
+      if (again && viaKeys) again.focus(); else ta.focus({ preventScroll: true });
+    };
+    inp.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); done(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); done(false); }
+    });
+    inp.addEventListener('blur', () => done(true));
+    inp.focus({ preventScroll: true });
+    inp.select();
+  }
+
+  /* ---- picking a sheet up ---- */
+  // a copy of the sheet that follows the hand; the sheet itself keeps its place, unseen
+  function lift(b) {
+    const r = b.getBoundingClientRect(), w = b.offsetWidth, h = b.offsetHeight;
+    const g = b.cloneNode(true);
+    g.classList.add('lifted');
+    g.removeAttribute('data-id');
+    g.tabIndex = -1;
+    g.style.width = w + 'px';
+    g.style.height = h + 'px';
+    g.style.left = (r.left + r.right) / 2 - w / 2 + 'px';
+    g.style.top = (r.top + r.bottom) / 2 - h / 2 + 'px';
+    g.style.transform = `rotate(${b.turn * 180 / Math.PI}deg)`;
+    room.insertBefore(g, $('desk'));
+    b.classList.add('held');
+    pile.classList.add('sorting');
+    return g;
+  }
+
+  function begin() {
+    const { b, x, y } = pending;
+    pending = null;
+    clearTimeout(holdTimer);
+    const kids = [...pile.children], i0 = kids.indexOf(b);
+    if (i0 < 1) return;
+    drag = { id: b.dataset.id, b, g: lift(b), i0, to: i0, n: kids.length - 1, x0: x, y0: y, x, y,
+      scroll0: well.scrollTop, turn: b.turn * 180 / Math.PI, out: false };
+    root.classList.add('holding');
+    if (navigator.vibrate && coarse) navigator.vibrate(8);
+    follow();
+    // near the top or bottom of the drawer the pile rolls on under the held sheet
+    const roll = () => {
+      if (!drag) return;
+      const box = well.getBoundingClientRect(), edge = 54;
+      const v = drag.y < box.top + edge ? -1 : drag.y > box.bottom - edge ? 1 : 0;
+      if (v && !drag.out) {
+        const before = well.scrollTop;
+        well.scrollTop += v * 9;
+        if (well.scrollTop !== before) follow();
+      }
+      scroller = requestAnimationFrame(roll);
+    };
+    scroller = requestAnimationFrame(roll);
+  }
+
+  function follow() {
+    const d = drag, dx = d.x - d.x0, dy = d.y - d.y0, p = pitch();
+    d.out = Math.abs(dx) > Math.max(90, Math.min(190, d.g.offsetWidth * .22));
+    // out over the side: the pile closes up behind it; otherwise the others make room where it would go
+    d.to = d.out ? d.n : Math.max(1, Math.min(d.n, d.i0 + Math.round((dy + well.scrollTop - d.scroll0) / p)));
+    [...pile.children].forEach((b, i) => {
+      const shift = i > d.i0 && i <= d.to ? -p : i < d.i0 && i >= d.to ? p : 0;
+      if (shift) b.style.setProperty('--dy', shift + 'px'); else b.style.removeProperty('--dy');
+    });
+    const lean = d.out ? (dx < 0 ? -5 : 5) : d.turn * .4;
+    d.g.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${lean}deg) scale(${d.out ? .95 : 1.012})`;
+    // the light on it: sampled across its top lines, where the eye is, and laid over it as a wash
+    const w = d.g.offsetWidth, left = parseFloat(d.g.style.left) + dx, top = parseFloat(d.g.style.top) + dy + S.lh * 2;
+    const stops = [0, .125, .25, .375, .5, .625, .75, .875, 1].map(f => drawerLight.at(left + f * w, top));
+    d.g.style.setProperty('--lit', `linear-gradient(90deg, ${stops.join(',')})`);
+    drawerLight.wake(450);
+  }
+
+  function settle() {                   // everything back as it lies, after a drag
+    pile.classList.remove('sorting');
+    root.classList.remove('holding');
+    for (const b of pile.children) { b.classList.remove('held'); b.style.removeProperty('--dy'); }
+    drawerLight.wake(450);
+  }
+  // Drops whatever is held where it was taken from. Says whether there was anything.
+  function letGo() {
+    clearTimeout(holdTimer);
+    const had = !!(pending || drag);
+    pending = null;
+    if (drag) {
+      cancelAnimationFrame(scroller);
+      drag.g.remove();
+      drag = null;
+      settle();
+    }
+    return had;
+  }
+
+  function drop() {
+    const d = drag;
+    drag = null;
+    cancelAnimationFrame(scroller);
+    root.classList.remove('holding');
+    dragged = true;
+    setTimeout(() => { dragged = false; }, 60);
+    if (d.out) { toss(d.id, d.x < d.x0 ? 'left' : 'right', d.g, { x: d.x, y: d.y }); return; }
+    const done = () => {
+      busy = false;
+      if (d.to !== d.i0) {
+        const [sh] = sheets.splice(d.i0 - 1, 1);
+        sheets.splice(d.to - 1, 0, sh);
+        save();
+      }
+      const top = well.scrollTop;
+      render();
+      well.scrollTop = top;
+      d.g.remove();
+      settle();
+    };
+    if (reduce) { done(); return; }
+    busy = true;
+    d.g.style.transition = 'transform .18s cubic-bezier(.2,.7,.2,1)';
+    d.g.style.transform = `translate3d(0,${(d.to - d.i0) * pitch() - (well.scrollTop - d.scroll0)}px,0) rotate(${d.turn}deg)`;
+    setTimeout(done, 190);
+  }
+
+  /* ---- throwing away, and thinking better of it ---- */
+  // g: the copy of the sheet that is in the hand, if it was dragged out; hand: where the hand is
+  function toss(id, side, g, hand) {
+    const i = sheets.findIndex(x => x.id === id);
+    if (i < 0) { if (g) g.remove(); settle(); return; }
+    if (!g) g = lift(pile.children[i + 1]);
+    // the sheet as it is at this moment: where, how big, how it is turned
+    const r = g.getBoundingClientRect(), m = new DOMMatrixReadOnly(getComputedStyle(g).transform);
+    const from = { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2, w: g.offsetWidth, h: g.offsetHeight, lean: Math.atan2(m.b, m.a) };
+    g.remove();
+
+    const [sh] = sheets.splice(i, 1);
+    const ball = { ...sh, gone: Date.now(), side, fx: Math.random(), fy: Math.random() };
+    bin.unshift(ball);
+    bin.length = Math.min(bin.length, BIN_MAX);         // the oldest ball is swept up for good
+    const sp = spots(), to = { x: sp.at[0].x + sp.size / 2, y: sp.at[0].y + sp.size / 2 };
+    hand = hand || { x: from.x, y: from.y };
+    // it rolls the way it is thrown, and remembers how far, so it lies the same way next time
+    const far = Math.hypot(to.x - hand.x, to.y - hand.y) || 1;
+    ball.spin = { ax: -(to.y - hand.y) / far, ay: (to.x - hand.x) / far, angle: 4 + Math.random() * 3.5 };
+    save();
+    const shown = !reduce && paperFx.ok;        // otherwise the ball is simply there
+    if (shown) flying.add(sh.id);
+    const top = well.scrollTop;
+    render();
+    well.scrollTop = top;
+    settle();
+    say(coarse ? 'Thrown away. Tap the ball of paper to smooth it out again.' : 'Thrown away. Click the ball of paper to smooth it out again.');
+    snd.crumple();
+    if (!shown) return;
+    paperFx.crumple(paperOf(sh), from, hand, to, sp.size, ball.spin).then(() => { flying.delete(sh.id); arrange(); });
+  }
+
+  function restore(id) {
+    const i = bin.findIndex(x => x.id === id);
+    if (i < 0 || flying.has(id)) return;
+    const e = binEl.children[i].getBoundingClientRect(), size = e.width;
+    const from = { x: (e.left + e.right) / 2, y: (e.top + e.bottom) / 2 };
+    const [b] = bin.splice(i, 1);
+    const sh = { id: b.id, text: b.text, at: b.at, ...(b.title && { title: b.title }) };
+    sheets.unshift(sh);
+    save();
+    render();
+    well.scrollTop = 0;
+    say('Back in the drawer, on top.', 3000);
+    snd.crumple(.5);
+    if (reduce || !paperFx.ok) return;
+    // its place in the pile is kept free until it has been smoothed out
+    const leafEl = pile.children[1], r = leafEl.getBoundingClientRect();
+    leafEl.classList.add('held');
+    const to = { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2, w: leafEl.offsetWidth, h: leafEl.offsetHeight, lean: leafEl.turn };
+    paperFx.smooth(paperOf(sh), from, size, b.spin || SPIN, to).then(() => {
+      for (const k of pile.children) if (k.dataset.id === sh.id) k.classList.remove('held');
+      drawerLight.wake(100);
+    });
+  }
+
+  /* ---- hands ---- */
+  pile.addEventListener('pointerdown', e => {
+    e.preventDefault();                     // typing focus stays on the paper
+    const b = e.target.closest('.leaf');
+    if (!b || !b.dataset.id || e.button || busy || drag || naming) return;
+    pending = { b, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch', pointer: e.pointerId };
+    // a finger scrolls the pile; it picks a sheet up only after resting on it
+    if (pending.touch) holdTimer = setTimeout(() => { if (pending) begin(); }, 380);
+  });
+  window.addEventListener('pointermove', e => {
+    if (pending && e.pointerId === pending.pointer) {
+      const far = Math.hypot(e.clientX - pending.x, e.clientY - pending.y);
+      if (pending.touch) { if (far > 9) { clearTimeout(holdTimer); pending = null; } }
+      else if (far > 6) begin();
+    }
+    if (drag) { drag.x = e.clientX; drag.y = e.clientY; follow(); }
+  });
+  window.addEventListener('pointerup', () => {
+    clearTimeout(holdTimer);
+    pending = null;
+    if (drag) drop();
+  });
+  window.addEventListener('pointercancel', () => { if (!drag) letGo(); });      // a scroll took the finger over
+  // once a sheet is in the fingers, the pile must not scroll under them
+  pile.addEventListener('touchmove', e => { if (drag && e.cancelable) e.preventDefault(); }, { passive: false });
+  pile.addEventListener('contextmenu', e => { if (coarse) e.preventDefault(); });
+
+  pile.addEventListener('click', e => {
+    const b = e.target.closest('.leaf');
+    if (!b || dragged || busy) return;
+    // on its slip: that is for naming it. (Asked of the place, not of the target: some
+    // browsers report every click inside a button as a click on the button.)
+    const slip = b.querySelector('.slip'), r = slip && slip.getBoundingClientRect();
+    if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { name(b, false); return; }
+    swap(b.dataset.id || null);
+  });
+  // with the keyboard: arrows go from sheet to sheet, Alt with an arrow moves the sheet,
+  // Delete throws it away
+  pile.addEventListener('keydown', e => {
+    const b = e.target.closest('.leaf');
+    if (!b || busy) return;
+    const kids = [...pile.children], i = kids.indexOf(b), k = e.key;
+    const focus = j => { const t = pile.children[Math.max(0, Math.min(pile.children.length - 1, j))]; if (t) t.focus(); };
+    if (k === 'ArrowUp' || k === 'ArrowDown') {
+      e.preventDefault();
+      const j = i + (k === 'ArrowUp' ? -1 : 1);
+      if (!e.altKey) { focus(j); return; }
+      if (i < 1 || j < 1 || j > sheets.length) return;
+      const [sh] = sheets.splice(i - 1, 1);
+      sheets.splice(j - 1, 0, sh);
+      save();
+      render();
+      focus(j);
+    } else if (k === 'F2' && i >= 1) {
+      e.preventDefault();
+      name(b, true);
+    } else if ((k === 'Delete' || k === 'Backspace') && i >= 1) {
+      e.preventDefault();
+      toss(b.dataset.id, 'right', null, null);
+      focus(i);
+    }
+  });
+  binEl.addEventListener('pointerdown', e => e.preventDefault());
+  binEl.addEventListener('click', e => { const b = e.target.closest('.ball'); if (b) restore(b.dataset.id); });
+  btn.addEventListener('click', () => set(!open));
+  $('desk').addEventListener('click', () => { if (!dragged) set(false); });
+
+  load();
+  render();
+
+  return {
+    get open() { return open; },
+    get naming() { return !!naming; },
+    set, swap, arrange, letGo,
+    has: node => el.contains(node) || binEl.contains(node),
+    roll: lines => well.scrollBy({ top: lines * pitch(), behavior: reduce ? 'auto' : 'smooth' }),
+  };
+})();
+
+/* ------------------------------------------------------------------ *
+ * The pages: every sheet of the text in the machine, seen from further
+ * back, to find one's way about a long text. They lie on the table in
+ * rows, each drawn small with its own lines. A desk lamp at the far edge
+ * of the table lights them: a third lamp, worked out per pixel like the
+ * other two, a broad cone that falls off towards the near edge and the
+ * corners. Clicking a page goes back to the machine with the paper rolled
+ * to it; the head stays where it was until a click in the text moves it.
+ * ------------------------------------------------------------------ */
+const spread = (() => {
+  const el = $('spread'), roll = $('spreadRoll'), floor = $('spreadFloor'), btn = $('bPages'), cv = $('sgl');
+  // An evening at the desk: the lamp stands out of sight towards the far left corner and
+  // is turned to shine on the pages. Its shade lets the light out in a broad cone with a
+  // very soft rim (full within INNER radians of its axis, none beyond OUTER), so the
+  // pages lie in a warm pool, brightest on the lamp's side, and the rest of the table
+  // sinks into the dusk. Grain, sheen and the pages' shadows all say where the lamp is.
+  // HEADROOM: the table is drawn that much brighter than it is and the light brings it
+  // back down, which leaves room for the varnish to shine brighter than the wood.
+  const OUTER = .95, INNER = .5, FOCUS = 2, EXPOSURE = 3.4, HEADROOM = 1.7;
+  let open = false, G = null, tidy = 0;
+  let gl = null, U = null, raf = 0, last = 0, until = 0, k = 0, t0 = 0, deskReady = false;
+
+  const FRAG = `
+precision highp float;
+uniform vec2 uRes;      // the screen, css px
+uniform float uDpr;
+uniform vec3 uLamp;     // the bulb: x, y (css px, y down) and its height above the table
+uniform vec3 uAxis;     // the way the shade points
+uniform float uLevel;
+uniform vec4 uGrid;     // the first page's corner, and the distance from one page to the next, across and down
+uniform vec4 uMini;     // a page's width and height here, how many lie in a row, and how many there are
+uniform float uRolled;  // how far the table has been scrolled
+uniform sampler2D uDesk;
+uniform vec2 uDeskTile;
+
+const float OUTER = ${OUTER.toFixed(3)};
+const float INNER = ${INNER.toFixed(3)};
+const float FOCUS = ${FOCUS.toFixed(3)};
+const float EXPOSURE = ${EXPOSURE.toFixed(3)};
+const float HEADROOM = ${HEADROOM.toFixed(3)};
+const vec3 AMBIENT = vec3(0.289, 0.278, 0.316);
+${GLSL_NOISE}
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y * uDpr - gl_FragCoord.y) / uDpr;
+  vec2 g = (p - uGrid.xy) / uGrid.zw, cell = floor(g), q = (g - cell) * uGrid.zw;
+  bool onPaper = cell.x >= 0. && cell.x < uMini.z && cell.y >= 0. && cell.y * uMini.z + cell.x < uMini.w
+    && q.x <= uMini.x && q.y <= uMini.y;
+
+  vec3 n;
+  if (onPaper) {
+    // a sheet seen from here is nearly flat: its tooth, and a lean of its own
+    vec2 c = mod(floor(q / 1.2) + cell * 37., vec2(4096.));
+    vec2 slope = (vec2(hash(c), hash(c + 71.3)) - .5) * .06 + (vec2(hash(cell + 3.), hash(cell + 9.)) - .5) * .05;
+    n = normalize(vec3(-slope, 1.));
+  } else if (uDeskTile.y > .5) {
+    vec3 m = texture2D(uDesk, vec2(p.x, p.y + uRolled) / uDeskTile.x).xyz * 2. - 1.;
+    n = normalize(vec3(m.x * 1.6, -m.y * 1.6, m.z));
+  } else {
+    n = vec3(0., 0., 1.);
+  }
+
+  vec3 toLamp = vec3(uLamp.xy - p, uLamp.z);
+  float d = length(toLamp);
+  vec3 l = toLamp / d;
+  float facing = max(dot(n, l), 0.);
+  float ct = dot(-l, uAxis);
+  float theta = acos(clamp(ct, -1., 1.));
+  float hood = smoothstep(cos(OUTER), cos(INNER), ct);          // the shade's edge, and the soft rim it leaves
+  float beam = pow(max(ct, 0.), FOCUS);
+  // the inside of the shade is not even: faint streaks fan out from the bulb, and rings
+  vec3 e1 = normalize(vec3(uAxis.xy, 0.) - dot(vec3(uAxis.xy, 0.), uAxis) * uAxis), e2 = cross(uAxis, e1);
+  float around = atan(dot(-l, e2), dot(-l, e1));
+  float flaws = 1. + .16 * (noise(vec2(around * 9. + 11., 4.5), vec2(64.)) - .5) * smoothstep(.06, .5, theta) + .015 * sin(theta * 90.);
+
+  float lit = uLevel * EXPOSURE * beam * hood * flaws * facing * (uLamp.z * uLamp.z) / (d * d);
+  // what gets past the shade and off the lamp's own arm: weak, all round, soon gone
+  float spill = uLevel * .12 / (1. + dot(toLamp.xy, toLamp.xy) / (uLamp.z * uLamp.z * 1.2));
+
+  vec2 uv = p / uRes;
+  vec3 dusk = AMBIENT * .6 * (1.08 - .18 * (uv.x * .5 + uv.y * .5));
+  float nearness = clamp(1.6 * uLamp.z * uLamp.z / (d * d), 0., 1.);
+  vec3 warm = mix(vec3(1., .66, .4), vec3(1., .85, .62), nearness * hood);     // redder the further the light has come
+  vec3 c = dusk + warm * lit + vec3(1., .68, .4) * spill;
+  c = 1. - exp(-c);
+  if (!onPaper) {
+    // The table is varnished and worn. Seen from straight above, the bulb would be
+    // mirrored in it at the lamp's foot; what reaches the table from there is a sheen in
+    // that corner, broken up by every scratch and by the grain.
+    vec3 h = normalize(l + vec3(0., 0., 1.));
+    float gloss = pow(max(dot(n, h), 0.), 26.) * .55;
+    c = c / HEADROOM + warm * gloss * hood * uLevel * (1. - 1. / HEADROOM) * 1.6;
+  }
+  c += (hash(gl_FragCoord.xy) - .5) / 255.;
+  gl_FragColor = vec4(min(c, 1.), 1.);
+}`;
+
+  function init() {
+    try {
+      ({ gl, U } = glProgram(cv, FRAG, ['uRes', 'uDpr', 'uLamp', 'uAxis', 'uLevel', 'uGrid', 'uMini', 'uRolled', 'uDesk', 'uDeskTile']));
+    } catch (err) {
+      console.warn('Typelight: the desk lamp falls back to a plain light.', err);
+      gl = null;
+      el.classList.add('plain');
+      return;
+    }
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); gl = null; el.classList.add('plain'); });
+    const img = new Image();                // the table's relief, as under the other lamp
+    img.onload = () => {
+      if (!gl) return;
+      try {
+        gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.uniform1i(U.uDesk, 0);
+        deskReady = true;
+        wake();
+      } catch { /* a flat table */ }
+    };
+    img.src = 'textures/desk-normal.jpg';
+  }
+
+  function frame(now) {
+    raf = 0;
+    if (!gl || !G) return;
+    const dt = Math.min(100, now - last);
+    last = now;
+    // it comes on evenly, a moment after the view has begun to step back, and goes out quickly
+    if (open) { if (now >= t0) k += (1 - k) * (reduce ? 1 : 1 - Math.exp(-dt / 110)); }
+    else k *= reduce ? 0 : Math.exp(-dt / 60);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(S.vw * dpr), h = Math.round(S.vh * dpr);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; gl.viewport(0, 0, w, h); }
+    gl.uniform2f(U.uRes, S.vw, S.vh);
+    gl.uniform1f(U.uDpr, cv.width / S.vw);
+    gl.uniform3f(U.uLamp, G.lamp[0], G.lamp[1], G.lamp[2]);
+    gl.uniform3f(U.uAxis, G.axis[0], G.axis[1], G.axis[2]);
+    gl.uniform1f(U.uLevel, k * LAMPS[S.lamp]);
+    gl.uniform4f(U.uGrid, G.x0, G.y0 - roll.scrollTop, G.w + G.gap, G.h + G.gap);
+    gl.uniform4f(U.uMini, G.w, G.h, G.cols, G.n);
+    gl.uniform1f(U.uRolled, roll.scrollTop);
+    gl.uniform2f(U.uDeskTile, G.tile, deskReady ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (now < until || (open ? now < t0 || k < .997 : k > .004)) raf = requestAnimationFrame(frame);
+  }
+  function wake(ms = 0) {
+    until = Math.max(until, performance.now() + ms);
+    if (gl && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+  }
+
+  /* ---- the pages themselves ---- */
+  const count = () => pageOf(lastRow()) + 1;
+  // the page under the head, wherever the paper has been rolled to
+  const here = () => Math.max(0, Math.min(count() - 1, Math.floor((rowY(S.row) - S.scroll + (TOP_ROWS + .5) * S.lh) / S.pitch)));
+
+  function draw(i, c) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.width = Math.round(G.w * dpr);
+    c.height = Math.round(G.h * dpr);
+    const g = c.getContext('2d');
+    g.setTransform(dpr * G.z, 0, 0, dpr * G.z, 0, 0);              // drawn as on the sheet itself, only smaller
+    g.fillStyle = '#1c1713';
+    g.font = `${S.fs}px "Courier Prime", "Courier New", Courier, monospace`;
+    const x = S.margin * S.chw, r0 = i * S.per, r1 = Math.min(lastRow(), r0 + S.per - 1);
+    for (let r = r0; r <= r1; r++) {
+      const ln = S.lines[r];
+      if (ln.e > ln.s) g.fillText(S.text.slice(ln.s, ln.e), x, (TOP_ROWS + r - r0) * S.lh + S.lh * .5 + S.fs * .32);
+    }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);                          // its number, in pencil, at a size that can be read from here
+    g.font = 'italic 11px "Courier Prime", "Courier New", Courier, monospace';
+    g.fillStyle = 'rgba(58,50,44,.85)';
+    g.textAlign = 'right';
+    g.fillText(String(i + 1), G.w - 8, 16);
+  }
+
+  function build() {
+    const n = count(), narrow = S.vw < 620;
+    const gap = narrow ? 14 : 28, side = narrow ? 14 : 52, want = narrow ? 150 : 172;
+    const room = S.vw - 2 * side;
+    const cols = Math.max(2, Math.floor((room + gap) / (want + gap)));
+    const w = Math.floor(Math.min(want, (room - gap * (cols - 1)) / cols)), h = Math.round(w * S.ph / S.w);
+    const used = Math.min(n, cols), rows = Math.ceil(n / cols), tall = rows * (h + gap) - gap;
+    const x0 = Math.round((S.vw - (used * w + (used - 1) * gap)) / 2);
+    const y0 = Math.round(Math.max(narrow ? 20 : 44, (S.vh - S.hud - tall) * .4));      // a few pages lie where the light is best
+    G = { n, cols, w, h, gap, x0, y0, z: w / S.w, tile: Math.round(S.lh * DESK_TILE * .78) };
+    // Where the lamp stands for these pages. R: about how far from their middle the pages
+    // in view reach. The lamp is that far and a quarter up and to the left of the middle,
+    // somewhat higher than that above the table, and aimed a little past the middle, which
+    // evens out what its distance takes away.
+    const bw = used * (w + gap) - gap, bh = Math.min(tall, S.vh - S.hud - y0);
+    const R = Math.max(Math.min(S.vw, S.vh) * .34, Math.hypot(bw, bh) / 2 * .8 + 40);
+    const ln = Math.hypot(S.vw, S.vh * .9), lx = S.vw / ln, ly = S.vh * .9 / ln, cx = S.vw / 2, cy = y0 + bh / 2;
+    G.lamp = [cx - lx * R * 1.25, cy - ly * R * 1.25, R * 1.4];
+    const ax = cx + lx * R * .2 - G.lamp[0], ay = cy + ly * R * .2 - G.lamp[1], an = Math.hypot(ax, ay, G.lamp[2]);
+    G.axis = [ax / an, ay / an, -G.lamp[2] / an];
+    root.style.setProperty('--spread-tile', G.tile + 'px');
+    floor.style.height = y0 + tall + S.hud + 40 + 'px';
+    floor.textContent = '';
+    const at = here();
+    for (let i = 0; i < n; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mini' + (i === at ? ' here' : '');
+      b.dataset.page = i;
+      b.setAttribute('aria-label', `Page ${i + 1} of ${n}` + (i === at ? ', where the head is' : ''));
+      b.style.left = x0 + (i % cols) * (w + gap) + 'px';
+      b.style.top = y0 + Math.floor(i / cols) * (h + gap) + 'px';
+      b.style.width = w + 'px';
+      b.style.height = h + 'px';
+      b.dataset.x = x0 + (i % cols) * (w + gap) + w / 2;
+      b.dataset.y = y0 + Math.floor(i / cols) * (h + gap) + h / 2;
+      const c = document.createElement('canvas');
+      c.width = c.height = 1;
+      b.appendChild(c);
+      floor.appendChild(b);
+    }
+    const cur = floor.children[at];
+    roll.scrollTop = Math.max(0, cur.offsetTop - (S.vh - S.hud - h) / 2);
+    fill();
+    return cur;
+  }
+  // Only the pages near the screen are drawn; the others are blank paper until they
+  // come up, and are blanked again when they have gone, so a long text costs no more.
+  function fill() {
+    tidy = 0;
+    if (!G) return;
+    const pitch = G.h + G.gap, top = roll.scrollTop - G.y0;
+    const first = Math.max(0, Math.floor((top - 300) / pitch)) * G.cols, end = Math.min(G.n, (Math.floor((top + S.vh + 300) / pitch) + 1) * G.cols);
+    for (let i = 0; i < G.n; i++) {
+      const b = floor.children[i], c = b.firstChild, near = i >= first && i < end;
+      if (near && c.width <= 1) draw(i, c);
+      else if (!near && c.width > 1) c.width = c.height = 1;
+      if (near) {                             // its shadow lies away from the lamp, longer the further off it is
+        const L = G.lamp, k = 11 / L[2];
+        b.style.setProperty('--sx', ((+b.dataset.x - L[0]) * k).toFixed(1) + 'px');
+        b.style.setProperty('--sy', ((+b.dataset.y - roll.scrollTop - L[1]) * k).toFixed(1) + 'px');
+      }
+    }
+  }
+
+  function set(v) {
+    if (v === open || (v && count() < 2)) return;
+    if (v && drawer.open) drawer.set(false);
+    open = v;
+    root.classList.toggle('pages-open', v);
+    el.inert = !v;
+    btn.setAttribute('aria-expanded', v);
+    btn.textContent = v ? 'Close pages' : 'Pages';
+    if (v) {
+      persist();
+      const cur = build();
+      t0 = performance.now() + (reduce ? 0 : 160);
+      if (reduce) k = 1;
+      cur.focus({ preventScroll: true });
+    } else ta.focus({ preventScroll: true });
+    snd.tick();
+    wake(600);
+    hud.classList.remove('quiet');
+  }
+
+  // Back to the machine, with the paper rolled so that page i can be read from its top.
+  function pick(i) {
+    set(false);
+    const at = rowY(S.row), top = i * S.pitch - TOP_ROWS * S.lh;       // (the page's top edge, counted like the lines)
+    if (i === pageOf(S.row)) { setScroll(0); return; }                 // the page the head is on: to the head
+    setScroll(at - top - S.ly + Math.round(S.lh * 1.4));
+  }
+
+  floor.addEventListener('click', e => {
+    const b = e.target.closest('.mini');
+    if (b) pick(+b.dataset.page); else set(false);
+  });
+  // with the keyboard: the arrows go from page to page
+  floor.addEventListener('keydown', e => {
+    const b = e.target.closest('.mini');
+    if (!b) return;
+    const i = +b.dataset.page, n = floor.children.length;
+    const j = { ArrowLeft: i - 1, ArrowRight: i + 1, ArrowUp: i - G.cols, ArrowDown: i + G.cols, Home: 0, End: n - 1 }[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    if (j >= 0 && j < n) floor.children[j].focus();
+  });
+  roll.addEventListener('scroll', () => { wake(); if (!tidy) tidy = requestAnimationFrame(fill); }, { passive: true });
+  btn.addEventListener('click', () => set(!open));
+
+  return {
+    init, set,
+    get open() { return open; },
+    has: node => el.contains(node),
+    // the button is there only when there is more than one page
+    sync() { btn.hidden = count() < 2; if (open && count() < 2) set(false); },
+    size() { if (open) { build(); wake(); } },
+    wake,
+  };
+})();
 
 /* ------------------------------------------------------------------ *
  * Controls, saving
@@ -1055,12 +3487,27 @@ function words(n) {
   return n + (n === 1 ? ' word' : ' words');
 }
 function persist() {
+  clearTimeout(saveTimer);
   store.set(TEXT_KEY, S.text);
+  store.set(AT_KEY, String(S.at));
+  store.set(TITLE_KEY, S.title);
+  paintCount();
+  spread.sync();
+}
+// How much there is; or, with the paper rolled back in a longer text, which page is at the head.
+function paintCount() {
+  const n = pageOf(lastRow()) + 1;
+  if (S.scroll || !atEnd()) {
+    const at = Math.max(0, Math.min(n - 1, Math.floor((rowY(S.row) - S.scroll + (TOP_ROWS + .5) * S.lh) / S.pitch)));
+    countEl.textContent = (n > 1 ? `page ${at + 1} of ${n}` : '') + (S.scroll || n > 1 ? '' : 'Correcting') + (atEnd() ? '' : (n > 1 ? ', correcting' : '') + ' (Esc goes back to the end)');
+    return;
+  }
   const m = S.text.match(/\S+/g);
-  countEl.textContent = words(m ? m.length : 0);
+  countEl.textContent = words(m ? m.length : 0) + (n > 1 ? ', ' + n + ' pages' : '');
 }
 let saveTimer = 0;
 function touched() {
+  S.at = Date.now();
   hud.classList.add('quiet');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persist, 350);
@@ -1071,6 +3518,8 @@ function savePrefs() { store.set(PREF_KEY, JSON.stringify({ sound: S.sound, lamp
 function paintPrefs() {
   root.style.setProperty('--lamp', LAMPS[S.lamp]);
   light.wake();
+  drawerLight.wake();
+  spread.wake();
   $('bLamp').textContent = 'Lamp: ' + LAMP_NAMES[S.lamp];
   const bs = $('bSound');
   bs.textContent = 'Sound: ' + (snd.failed ? 'unavailable' : S.sound ? 'on' : 'off');
@@ -1109,10 +3558,12 @@ $('bSound').addEventListener('click', () => {
 $('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = soundTitle(); });
 $('bSave').addEventListener('click', saveFile);
 $('bNew').addEventListener('click', () => {
-  if (S.text && !confirm('Start a new sheet? This deletes the current text. Save it first if you want to keep it.')) return;
-  ta.value = '';
-  onInput();
-  persist();
+  const kept = S.text.trim() !== '';
+  drawer.swap(null);                        // nothing is thrown away: the sheet goes into the drawer
+  if (kept) {
+    countEl.textContent = 'Put away in the drawer';
+    saveTimer = setTimeout(persist, 2600);  // ... and then the word count is back
+  }
   wake();
   ta.focus({ preventScroll: true });
 });
@@ -1134,17 +3585,59 @@ paintPrefs();
 snd.load().then(paintPrefs);
 
 S.text = store.get(TEXT_KEY) || '';
+S.at = Number(store.get(AT_KEY)) || Date.now();
+S.title = store.get(TITLE_KEY) || '';
 ta.value = S.text;
+S.caret = S.text.length;
 light.init();
+drawerLight.init();
+spread.init();
 measure();
 persist();
 ta.focus({ preventScroll: true });
 pinCaret();
 
+// The opening: the lamp flickers on behind a sheet of frosted glass; once it burns
+// steadily, the glass clears.
+const splash = $('splash');
+let ignited = false;
+function ignite() {
+  if (ignited) return;
+  ignited = true;
+  root.classList.add('lit');
+  // The glass stays until the bulb has stopped flickering, and a moment longer.
+  const burning = light.ignite();
+  splash.style.setProperty('--hold', Math.max(1000, Math.round(burning) + 150) + 'ms');
+}
+function skipSplash() {
+  ignite();
+  if (!splash.isConnected) return;
+  splash.classList.add('skip');
+  setTimeout(() => splash.remove(), 250);
+}
+splash.addEventListener('animationend', e => { if (e.animationName === 'splash-out') splash.remove(); });
+for (const type of ['keydown', 'pointerdown', 'wheel']) {
+  window.addEventListener(type, skipSplash, { capture: true, once: true, passive: true });
+}
+ignite();
+
+const showName = () => root.classList.add('fonts');
+setTimeout(showName, 450);
+
+// Adding or removing #demo in the address bar does not load the page again by itself.
+window.addEventListener('hashchange', () => { if (isDemo() !== DEMO) location.reload(); });
+if (DEMO) {
+  const tag = document.createElement('span');
+  tag.textContent = 'Demo: nothing is saved';
+  countEl.after(tag);
+  tag.style.marginLeft = '14px';
+}
+
 window.addEventListener('resize', measure);
 if (window.visualViewport) window.visualViewport.addEventListener('resize', measure);
 if (document.fonts) {
   document.fonts.load('19px "Courier Prime"').then(measure, () => {});
+  document.fonts.load('700 22px "Courier Prime"').then(showName, showName);
   document.fonts.ready.then(measure);
 }
 })();
