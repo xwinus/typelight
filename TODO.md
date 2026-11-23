@@ -3,27 +3,26 @@
 What is still missing, roughly in the order it would be missed by someone
 writing something they care about.
 
+The desktop product and public demo release checklist is in [MVP.md](MVP.md).
+See [BUSINESS.md](BUSINESS.md) for the commercial direction and validation plan.
+The items below retain the detailed prototype notes.
+
 ## Getting text in and out
 
 - [ ] Copy a part of the text. Nothing can be selected, so "Save .txt" is the
       only way out.
 
-## Agreed, not built
+## Put off
 
 - [ ] Tear the sheet out of the machine: it is crumpled and lands on the
-      floor as a ball.
-
-## Longer work
-
-- [ ] Search in the text and in the drawer.
-- [ ] Word count over all the texts in the drawer.
-- [ ] The floor: sweep it (throw the balls away for good), show the first
-      words of a text when hovering over its ball, and say when the oldest
-      ball is about to go.
-- [ ] Work offline: the typeface comes from Google Fonts and the app cannot
-      be installed.
+      floor as a ball. Not now; it would want deciding which sheet goes (the
+      last, the one under the head, or the whole text) and how it is torn.
 
 ## To check
+
+- [ ] Electron desktop on macOS, Windows, and Linux: clean installation, audio,
+      input, print, offline restart, recovery, and upgrades preserving documents.
+- [ ] Sign and notarize the macOS release; sign the Windows installer.
 
 - [ ] Czech diacritics typed with dead keys in the middle of a text. Passes
       with composition simulated in Chrome (including undo); not yet tried on
@@ -40,3 +39,6 @@ writing something they care about.
 - [ ] All motion and sound by eye and ear: the page turn, rolling by lines,
       the pages overview and its lamp coming on, the crumpling.
 - [ ] The pages overview without WebGL (the plain gradient).
+- [ ] Installing the app, and using it offline, on a real phone and in
+      Safari (tested offline in Chrome only). A new version reaches an
+      installed app on the next start with a connection.

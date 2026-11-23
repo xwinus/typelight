@@ -1,0 +1,46 @@
+appId: com.typelight.app
+productName: Typelight
+asar: true
+directories:
+  output: build/electron
+artifactName: Typelight-${version}-${os}-${arch}.${ext}
+files:
+  - package.json
+  - index.html
+  - logo.svg
+  - logo-mark.svg
+  - apple-touch-icon.png
+  - manifest.webmanifest
+  - LICENSE
+  - desktop/electron/**
+  - desktop/web/**
+  - fonts/**
+  - icons/**
+  - sounds/**
+  - textures/**
+  - '!**/.DS_Store'
+mac:
+  category: public.app-category.productivity
+  minimumSystemVersion: '14.0'
+  icon: icons/icon-512.png
+  identity: '-'
+  target:
+    - dmg
+    - zip
+win:
+  icon: icons/icon-512.png
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+linux:
+  syncDesktopName: true
+  icon: icons/icon-512.png
+  category: Office
+  maintainer: Typelight contributors
+  target:
+    - AppImage
+    - deb

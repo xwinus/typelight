@@ -9,10 +9,42 @@
 <meta name="description" content="A typewriter for the small hours: a sheet of paper, a type head, and a lamp.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="fonts/courier-prime-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  /* Courier Prime, kept here (see fonts/OFL.txt), so the app needs no connection: the
+     Latin letters and the rest of Latin, Czech among it, in separate files. */
+  @font-face {
+    font-family: "Courier Prime"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url(fonts/courier-prime-400-latin.woff2) format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Courier Prime"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url(fonts/courier-prime-400-latin-ext.woff2) format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+  @font-face {
+    font-family: "Courier Prime"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url(fonts/courier-prime-700-latin.woff2) format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Courier Prime"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url(fonts/courier-prime-700-latin-ext.woff2) format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+  @font-face {
+    font-family: "Courier Prime"; font-style: italic; font-weight: 400; font-display: swap;
+    src: url(fonts/courier-prime-400italic-latin.woff2) format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Courier Prime"; font-style: italic; font-weight: 400; font-display: swap;
+    src: url(fonts/courier-prime-400italic-latin-ext.woff2) format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+
   :root {
     /* materials */
     --paper: #f5eddb;
@@ -133,6 +165,8 @@
   .c { display: inline-block; width: var(--chw); text-align: center; }
   .c.hv { text-shadow: 0 0 .8px rgba(28,23,19,.85); }  /* a harder strike */
   .c.fr { animation: strike 110ms ease-out; }
+  .c.hit { background: rgba(255,206,84,.42); border-radius: 2px; }      /* found: a highlighter's stroke */
+  .c.hit.now { background: rgba(255,158,48,.62); }
   @keyframes strike { from { opacity: 0; filter: blur(1.4px); } }
   .ghost { opacity: .42; font-style: italic; }
 
@@ -269,14 +303,41 @@
   .hud .name { color: rgba(243,231,207,.82); margin-right: 9px; }
   .hud .warn { margin-left: 14px; color: rgba(255,168,120,.92); cursor: help; }   /* the browser would not keep the text */
   .hud .warn[hidden] { display: none; }
+  .hud .find {                   /* a strip just above the controls, in the middle: it takes no room from them */
+    position: absolute; left: 50%; bottom: calc(100% - 4px); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    max-width: calc(100vw - 24px); padding: 4px 14px 6px;
+    background: rgba(18,15,13,.9); border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(236,214,178,.08), 0 6px 18px rgba(0,0,0,.5);
+  }
+  .hud .find[hidden] { display: none; }
+  .hud .find input {
+    all: unset; box-sizing: border-box; width: 220px; min-width: 0; flex: 0 1 auto; padding: 7px 2px 5px;
+    border-bottom: 1px solid rgba(236,214,178,.35);
+    color: rgba(243,231,207,.92); font: inherit; cursor: text;
+    user-select: text; -webkit-user-select: text;
+  }
+  .hud .find input::placeholder { color: rgba(236,214,178,.35); }
+  .hud .find input:focus { border-bottom-color: rgba(255,214,160,.75); }
+  .hud .find .n { white-space: nowrap; }
+  .hud .find button {
+    all: unset; cursor: pointer; padding: 8px 4px; white-space: nowrap;
+    text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .22em;
+  }
+  .hud .find button:hover { color: rgba(255,232,196,.95); }
+  .hud .find button:disabled { cursor: default; text-decoration: none; }
+  .hud .find button[hidden] { display: none; }
   .hud .hint {                   /* how the drawer works, shown while it is out */
     flex: 1; min-width: 0; padding: 8px 4px; text-align: center; line-height: 1.35;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;   /* (two lines at most: the controls keep their height) */
     opacity: 0; transition: opacity .35s ease;
   }
   .drawer-open .hud .hint { opacity: 1; }
   @media (max-width: 619px) {    /* no room beside the name: the hint gets a row of its own, kept free for it */
     .hud { flex-wrap: wrap; }
     .hud .hint { order: -1; flex: 0 0 100%; min-height: calc(2.7em + 16px); }
+    .hud .find { left: 10px; right: 10px; transform: none; flex-wrap: wrap; justify-content: space-between; row-gap: 0; }
+    .hud .find input { width: 100%; flex: 1 1 100%; }
   }
   .hud nav { display: flex; flex-wrap: wrap; justify-content: flex-end; }
   .hud button[hidden] { display: none; }
@@ -385,6 +446,7 @@
   .well::-webkit-scrollbar { display: none; }
   .pile { padding: 24px var(--pad) calc(var(--lh) * .9); }
 
+  .leaf.miss { filter: brightness(.42); }      /* being looked for, and not in this one */
   .leaf {
     all: unset; box-sizing: border-box; display: block; position: relative;
     width: 100%; height: calc(var(--lh) * 12);
@@ -493,6 +555,16 @@
   .ball:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   .ball.pending { visibility: hidden; }             /* still in the air, or being smoothed out */
   .ball.plain { background: radial-gradient(circle at 40% 35%, #6f6a66, #3a3735 70%); }    /* no WebGL to draw it with */
+  .sweep {                       /* on the floor, by the balls: throws them all away for good */
+    all: unset; position: absolute; pointer-events: auto; cursor: pointer;
+    padding: 6px 8px; border-radius: 4px;
+    font: 13px/1 "Courier Prime", "Courier New", Courier, monospace;
+    color: rgba(236,214,178,.42); white-space: nowrap;
+    transition: color .2s ease;
+  }
+  .sweep:hover, .sweep:focus-visible { color: rgba(255,232,196,.95); }
+  .sweep:focus-visible { outline: 1px solid rgba(255,214,160,.7); }
+  .sweep.sure { color: rgba(255,168,120,.92); }
   .fx {
     position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 3;
     pointer-events: none;
@@ -654,12 +726,18 @@
       <span class="warn" id="warn" role="status" hidden>Not saved in this browser</span>
     </div>
     <span class="hint" id="hint" aria-live="polite"></span>
+    <span class="find" id="find" hidden>
+      <input id="findIn" type="text" placeholder="Find" aria-label="Find in the text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <span class="n" id="findN" aria-live="polite"></span>
+      <button type="button" id="findMore" hidden></button>
+    </span>
     <nav>
       <button type="button" id="bPages" data-key="p" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
       <button type="button" id="bDrawer" data-key="d" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
       <button type="button" id="bBackup" data-key="b" title="Download every text, the one in the machine and those in the drawer, as one file" hidden>Back up</button>
       <button type="button" id="bLamp" data-key="l" title="Lamp brightness"></button>
       <button type="button" id="bSound" data-key="o" title="Typewriter sounds"></button>
+      <button type="button" id="bFind" data-key="i" title="Find a word in this text, and the texts in the drawer that have it" aria-controls="find">Find</button>
       <button type="button" id="bOpen" data-key="f" title="Open a text file, or a backup; files can also be dropped on the page">Open file</button>
       <button type="button" id="bSave" data-key="s" title="Download the text as a file">Save .txt</button>
       <button type="button" id="bNew" data-key="n" title="Put this text away in the drawer and start another on a blank sheet">New text</button>
@@ -691,6 +769,8 @@ const beam = $('beam'), head = $('head'), kick = $('kick'), bulb = $('bulb');
 const ta = $('ta'), hud = $('hud'), probe = $('probe'), countEl = $('count');
 
 const TEXT_KEY = 'typelight.text', PREF_KEY = 'typelight.prefs';
+const desktop = window.typelightDesktop;
+const desktopToolbar = Boolean(window.typelightHost);
 const AT_KEY = 'typelight.edited', PILE_KEY = 'typelight.drawer', TITLE_KEY = 'typelight.title';
 const isDemo = () => location.hash.toLowerCase() === '#demo';
 const DEMO = isDemo();      // a drawer of sample sheets to play with; nothing is read or saved
@@ -721,9 +801,9 @@ const S = {
 };
 
 const store = {
-  get(k) { if (DEMO) return null; try { return localStorage.getItem(k); } catch { return null; } },
+  get(k) { if (DEMO) return null; if (desktop) return desktop.get(k); try { return localStorage.getItem(k); } catch { return null; } },
   // false when the browser would not take it (storage full or switched off): the app keeps going unsaved
-  set(k, v) { if (DEMO) return true; try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  set(k, v) { if (DEMO) return true; if (desktop) return desktop.set(k, v); try { localStorage.setItem(k, v); return true; } catch { return false; } },
 };
 
 /* ------------------------------------------------------------------ *
@@ -809,13 +889,21 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 
 function lineHTML(s, e) {
   let out = '', i = s;
+  const found = S.found, hits = found ? found.hits : null;
+  let k = 0;
+  if (hits) for (let lo = 0, hi = hits.length; lo < hi;) { const m = lo + hi >> 1; if (hits[m].e <= s) lo = k = m + 1; else hi = k = m; }
   for (const ch of S.text.slice(s, e)) {
-    if (ch === ' ') { out += ' '; i++; continue; }
+    let hit = '';
+    if (hits) {
+      while (k < hits.length && hits[k].e <= i) k++;
+      if (k < hits.length && hits[k].s <= i) hit = k === found.cur ? ' hit now' : ' hit';
+    }
+    if (ch === ' ') { out += hit ? '<span class="c' + hit + '"> </span>' : ' '; i++; continue; }
     const dy = ((hash(i, 1) - .5) * 1.3).toFixed(2);
     const rot = ((hash(i, 2) - .5) * 1.4).toFixed(2);
     const c = hash(i, 3);
     const op = (.74 + c * .26).toFixed(2);
-    out += '<span class="c' + (c > .93 ? ' hv' : '') + (i === S.fresh ? ' fr' : '') +
+    out += '<span class="c' + (c > .93 ? ' hv' : '') + (i === S.fresh ? ' fr' : '') + hit +
       '" style="transform:translateY(' + dy + 'px) rotate(' + rot + 'deg);opacity:' + op + '">' +
       (ESC[ch] || ch) + '</span>';
     i += ch.length;
@@ -1615,6 +1703,7 @@ function strikeOnKeyDown(e) {
 }
 
 function onInput() {
+  if (find.open) find.close(false);         // typing is done with looking
   if (drawer.open) drawer.set(false);       // typing shuts the drawer and goes back to the sheet
   if (spread.open) spread.set(false);       // ... and the pages
   let v = ta.value;
@@ -1714,6 +1803,7 @@ function setText(text) {
   place(0, 0);
   renderLines();
   pinCaret();
+  find.refresh();                           // (if a word is being looked for: in this text now)
 }
 
 function thud() {
@@ -1897,6 +1987,12 @@ document.addEventListener('keydown', e => {
     if (!e.repeat) pickFiles();
     return;
   }
+  if ((MAC ? e.metaKey : e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F' || e.key === 'g' || e.key === 'G')) {
+    e.preventDefault();                     // (not the browser's own Find)
+    if (e.key === 'f' || e.key === 'F') find.start();
+    else find.step(e.shiftKey ? -1 : 1);    // Cmd/Ctrl+G, and with Shift: the next place, the one before
+    return;
+  }
   if (drawer.naming) return;                // a name is being written on a slip: the keys are its own
   const item = menuKey(e);
   if (item) {                               // the menu (and nothing reaches the paper)
@@ -1904,6 +2000,8 @@ document.addEventListener('keydown', e => {
     if (!e.repeat && !item.hidden) { wake(); item.click(); }
     return;
   }
+  if (find.has(document.activeElement)) return;       // the find box: the keys are its own
+  if (find.open && e.key === 'Escape') { find.close(); e.preventDefault(); e.stopPropagation(); return; }
   if (spread.open) {
     if (e.key === 'Escape') { spread.set(false); return; }
     if (spread.has(document.activeElement) && /^(Tab|Enter| |Shift|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) return;
@@ -2832,6 +2930,9 @@ const drawer = (() => {
   let sheets = [], bin = [];                  // {id, text, at, title?}, top of the pile first; in the bin also {gone, side, fx, fy}
   let pending = null, drag = null, busy = false, dragged = false;
   let holdTimer = 0, scroller = 0, told = '', toldTimer = 0;
+  let peek = '';                              // what is said about the ball under the pointer
+  let sought = null, soughtAs = '', soughtN = 0;      // a word looked for (folded, and as typed), and how many texts have it
+  let sure = 0;                               // the floor is about to be swept: until when the second click does it
   const flying = new Set();                   // balls still in the air: not on the floor yet
   let naming = null;                          // the slip a name is being written on
 
@@ -2845,7 +2946,13 @@ const drawer = (() => {
     if (!t || t.text !== sh.text || t.cols !== S.cols || t.per !== S.per) thick.set(sh, t = { text: sh.text, cols: S.cols, per: S.per, n: pagesOf(sh.text) });
     return t.n;
   }
-  const noteOf = sh => day(sh.at) + ', ' + words((sh.text.match(/\S+/g) || []).length.toLocaleString('en-US')) +
+  const counted = new WeakMap();
+  function wordsOf(sh) {
+    let c = counted.get(sh);
+    if (!c || c.text !== sh.text) counted.set(sh, c = { text: sh.text, n: (sh.text.match(/\S+/g) || []).length });
+    return c.n;
+  }
+  const noteOf = sh => day(sh.at) + ', ' + words(wordsOf(sh).toLocaleString('en-US')) +
     (sheetsOf(sh) > 1 ? ', ' + sheetsOf(sh) + ' pages' : '');
   // what the renderer of crumpled paper wants to know about a sheet
   const paperOf = sh => ({ id: sh.id, seed: seedOf(sh.id), text: sh.text, note: noteOf(sh) });
@@ -2876,9 +2983,35 @@ const drawer = (() => {
 
   /* ---- what is said in the controls while the drawer is out ---- */
   function paintHint() {
-    hint.textContent = told || (!sheets.length ? 'Texts you put away lie here.'
+    const found = sought && `“${soughtAs}” is in ${soughtN} of ${sheets.length === 1 ? 'the one text' : sheets.length + ' texts'} in the drawer.`;
+    hint.textContent = peek || told || found || going() || (!sheets.length ? 'Texts you put away lie here.'
       : coarse ? 'Hold a text to pick it up. Move it, or pull it out sideways to throw it away.'
       : 'Drag a text to move it. Pull it out sideways to throw it away.');
+  }
+  // When a ball goes for good: so many days after it was thrown away.
+  const goesAt = b => (b.gone || 0) + BIN_DAYS * 864e5;
+  function inDays(at) {
+    const d = Math.floor((at - Date.now()) / 864e5);
+    return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : 'in ' + d + ' days';
+  }
+  // the first words of what is on a ball, enough to know it by
+  function opening(b) {
+    if (b.title) return b.title;
+    const t = b.text.replace(/\s+/g, ' ').trim();
+    if (t.length <= 32) return '“' + t + '”';
+    const cut = t.lastIndexOf(' ', 32);
+    return '“' + t.slice(0, cut > 16 ? cut : 32) + '…”';
+  }
+  // said while nothing else is: the oldest ball, when it has three days or less left
+  function going() {
+    if (!bin.length) return '';
+    const b = bin.reduce((a, x) => goesAt(x) < goesAt(a) ? x : a);
+    if (goesAt(b) - Date.now() > 3 * 864e5) return '';
+    return `${opening(b)}, on the floor, goes for good ${inDays(goesAt(b))}.`;
+  }
+  function peekAt(b) {
+    peek = b ? `${opening(b)}, thrown away on ${day(b.gone)}; goes for good ${inDays(goesAt(b))}.` : '';
+    paintHint();
   }
   function say(msg, ms = 5000) {
     told = msg;
@@ -2948,14 +3081,25 @@ const drawer = (() => {
       e.type = 'button';
       e.className = 'ball' + (flying.has(b.id) ? ' pending' : '');
       e.dataset.id = b.id;
-      e.title = `Thrown away on ${day(b.gone)}. Click to smooth it out and put it back in the drawer.`;
-      e.setAttribute('aria-label', e.title);
+      e.setAttribute('aria-label', `${opening(b)}, thrown away on ${day(b.gone)}, goes for good ${inDays(goesAt(b))}. Smooth it out and put it back in the drawer.`);
       e.style.left = sp.at[i].x + 'px';
       e.style.top = sp.at[i].y + 'px';
       if (!paperFx.ok) e.classList.add('plain');
       else if (S.lh) e.appendChild(paperFx.ball(paperOf(b), sp.size, b.spin || SPIN, { x: sp.at[i].x + sp.size / 2, y: sp.at[i].y + sp.size / 2 }));
       binEl.appendChild(e);
     });
+    if (bin.length) {
+      const s = document.createElement('button');
+      s.type = 'button';
+      s.className = 'sweep' + (Date.now() < sure ? ' sure' : '');
+      s.textContent = Date.now() < sure ? 'Gone for good? Click again' : 'Sweep the floor';
+      s.title = 'Throw away every ball of paper on the floor for good';
+      // above the floor beside the drawer; at the end of the row of balls on a narrow screen
+      const room = Math.min(S.dl, S.vw - S.dl - S.dw) >= 110;
+      if (room) { s.style.left = (S.dl >= 110 ? 4 : S.dl + S.dw + 4) + 'px'; s.style.top = (S.vh - S.drop + 2) + 'px'; }
+      else { s.style.left = (12 + bin.length * (sp.size + 10)) + 'px'; s.style.top = (S.vh - S.hud - sp.size / 2 - 18) + 'px'; }
+      binEl.appendChild(s);
+    }
     drawerLight.size();                 // the drawer may have changed height
     return sp;
   }
@@ -2963,8 +3107,10 @@ const drawer = (() => {
     pile.textContent = '';
     pile.appendChild(leaf(null));
     for (const sh of sheets) pile.appendChild(leaf(sh));
+    if (sought) marks();
     const sp = arrange();
     paintHint();
+    if (open) paintCount();
     return sp;
   }
 
@@ -3002,6 +3148,10 @@ const drawer = (() => {
     btn.setAttribute('aria-expanded', v);
     label(btn, v ? 'Close drawer' : 'Drawer');
     $('bBackup').hidden = !v;
+    $('bSave').hidden = $('bNew').hidden = v && !desktopToolbar;
+    peek = '';
+    paintCount();
+    find.sync();
     if (!v) ta.focus({ preventScroll: true });
     drawerLight.set(v);
     if (!reduce) snd.drawer(v, v ? .74 : .42);      // when it reaches its stop: as timed in the stylesheet
@@ -3179,6 +3329,7 @@ const drawer = (() => {
     const [sh] = sheets.splice(i, 1);
     const ball = { ...sh, gone: Date.now(), side, fx: Math.random(), fy: Math.random() };
     bin.unshift(ball);
+    const lost = bin.slice(BIN_MAX);
     bin.length = Math.min(bin.length, BIN_MAX);         // the oldest ball is swept up for good
     const sp = spots(), to = { x: sp.at[0].x + sp.size / 2, y: sp.at[0].y + sp.size / 2 };
     hand = hand || { x: from.x, y: from.y };
@@ -3192,7 +3343,8 @@ const drawer = (() => {
     render();
     well.scrollTop = top;
     settle();
-    say(coarse ? 'Thrown away. Tap the ball of paper to smooth it out again.' : 'Thrown away. Click the ball of paper to smooth it out again.');
+    say((coarse ? 'Thrown away. Tap the ball of paper to smooth it out again.' : 'Thrown away. Click the ball of paper to smooth it out again.') +
+      (lost.length ? ` The floor was full: ${opening(lost[0])} is gone for good.` : ''), lost.length ? 9000 : 5000);
     snd.crumple();
     if (!shown) return;
     paperFx.crumple(paperOf(sh), from, hand, to, sp.size, ball.spin).then(() => { flying.delete(sh.id); arrange(); });
@@ -3204,6 +3356,7 @@ const drawer = (() => {
     const e = binEl.children[i].getBoundingClientRect(), size = e.width;
     const from = { x: (e.left + e.right) / 2, y: (e.top + e.bottom) / 2 };
     const [b] = bin.splice(i, 1);
+    peek = '';
     const sh = { id: b.id, text: b.text, at: b.at, ...(b.title && { title: b.title }) };
     sheets.unshift(sh);
     save();
@@ -3285,7 +3438,69 @@ const drawer = (() => {
     }
   });
   binEl.addEventListener('pointerdown', e => e.preventDefault());
-  binEl.addEventListener('click', e => { const b = e.target.closest('.ball'); if (b) restore(b.dataset.id); });
+  binEl.addEventListener('click', e => {
+    if (e.target.closest('.sweep')) { sweep(); return; }
+    const b = e.target.closest('.ball');
+    if (b) restore(b.dataset.id);
+  });
+  // what is on a ball, said under the drawer while the pointer is on it (or the keyboard)
+  const ballOf = t => { const e = t.closest && t.closest('.ball'); return e && bin.find(x => x.id === e.dataset.id); };
+  binEl.addEventListener('pointerover', e => { const b = ballOf(e.target); if (b && !coarse) peekAt(b); });
+  binEl.addEventListener('pointerout', e => { if (ballOf(e.target) && !(e.relatedTarget && ballOf(e.relatedTarget))) peekAt(null); });
+  binEl.addEventListener('focusin', e => { const b = ballOf(e.target); if (b) peekAt(b); });
+  binEl.addEventListener('focusout', e => { if (ballOf(e.target)) peekAt(null); });
+
+  // Looking for a word: the texts that have it in them (or in their names) stand out, the
+  // rest are in shadow. Returns how many have it.
+  const foldedOf = new WeakMap();
+  function hasIt(sh) {
+    const key = (sh.title || '') + '\n' + sh.text;
+    let c = foldedOf.get(sh);
+    if (!c || c.key !== key) foldedOf.set(sh, c = { key, f: fold(key) });
+    return c.f.includes(sought);
+  }
+  function marks() {
+    const byId = new Map(sheets.map(x => [x.id, x]));
+    soughtN = 0;
+    for (const b of pile.children) {
+      const sh = b.dataset.id && byId.get(b.dataset.id);
+      const hit = !!(sought && sh && hasIt(sh));
+      if (hit) soughtN++;
+      b.classList.toggle('miss', !!sought && !!sh && !hit);
+    }
+  }
+  function seek(q, as) {
+    sought = q || null;
+    soughtAs = as || '';
+    marks();
+    paintHint();
+    return soughtN;
+  }
+
+  // Sweeping the floor throws every ball away for good. It cannot be undone, so it takes a
+  // second click, within a few seconds of the first.
+  let sureTimer = 0;
+  function sweep() {
+    if (!bin.length) return;
+    if (Date.now() >= sure) {
+      sure = Date.now() + 4000;
+      clearTimeout(sureTimer);
+      sureTimer = setTimeout(() => { sure = 0; arrange(); }, 4000);
+      arrange();
+      binEl.querySelector('.sweep').focus({ preventScroll: true });
+      return;
+    }
+    clearTimeout(sureTimer);
+    sure = 0;
+    const n = bin.length;
+    bin = [];
+    flying.clear();
+    peek = '';
+    save();
+    arrange();
+    snd.crumple(.3);
+    say(`Swept up: ${n === 1 ? 'one ball' : n + ' balls'} of paper, gone for good.`, 5000);
+  }
   btn.addEventListener('click', () => set(!open));
   $('desk').addEventListener('click', () => { if (!dragged) set(false); });
 
@@ -3297,7 +3512,7 @@ const drawer = (() => {
     const machine = { text: S.text, at: S.at, ...(S.title && { title: S.title }) };
     const n = sheets.length + (S.text.trim() ? 1 : 0);
     download('typelight-backup-' + stamp() + '.json', JSON.stringify({ typelight: 1, saved: new Date().toISOString(), machine, drawer: sheets }, null, 1), 'application/json');
-    say(n ? `Backed up ${n === 1 ? 'one text' : n + ' texts'} to a file.` : 'There is nothing to back up yet.', 4000);
+    if (!desktop) say(n ? `Backed up ${n === 1 ? 'one text' : n + ' texts'} to a file.` : 'There is nothing to back up yet.', 4000);
   }
   // Texts from files: a backup's, or plain text files. One plain text file on its own goes
   // into the machine, as if taken from the drawer (the text there is put away); anything
@@ -3367,7 +3582,9 @@ const drawer = (() => {
   return {
     get open() { return open; },
     get naming() { return !!naming; },
-    set, swap, arrange, letGo, backup, bring, reload,
+    set, swap, arrange, letGo, backup, bring, reload, seek,
+    get texts() { return sheets.length; },
+    get words() { return sheets.reduce((n, sh) => n + wordsOf(sh), 0); },
     has: node => el.contains(node) || binEl.contains(node),
     roll: lines => well.scrollBy({ top: lines * pitch(), behavior: reduce ? 'auto' : 'smooth' }),
   };
@@ -3664,10 +3881,129 @@ void main() {
     init, set,
     get open() { return open; },
     has: node => el.contains(node),
-    // the button is there only when there is more than one page
-    sync() { btn.hidden = count() < 2; if (open && count() < 2) set(false); },
+    sync() {
+      const available = count() >= 2;
+      if (open && !available) set(false);
+      btn.hidden = !desktopToolbar && !available;
+      btn.disabled = desktopToolbar && !available;
+      if (desktopToolbar) label(btn, available ? (open ? 'Close pages' : 'Pages') : 'Pages — requires two pages');
+    },
     size() { if (open) { build(); wake(); } },
     wake,
+  };
+})();
+
+/* ------------------------------------------------------------------ *
+ * Finding. Cmd/Ctrl+F, or "Find": a word looked for in the text in
+ * the machine is marked wherever it is, as with a highlighter, and the
+ * head is taken from one place to the next (Enter, Shift+Enter, or
+ * Cmd/Ctrl+G). The texts in the drawer that have it in them stand out
+ * from the rest while the drawer is out. Neither capitals nor accents
+ * count: "zivot" finds "Život".
+ * ------------------------------------------------------------------ */
+// The text with capitals made small and accents taken off, a character for a character,
+// so a place in it is the same place in the text.
+function fold(t) {
+  let out = '';
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (c.charCodeAt(0) < 128) { out += c.toLowerCase(); continue; }
+    const f = c.normalize('NFD')[0].toLowerCase();
+    out += f.length === 1 ? f : c;
+  }
+  return out;
+}
+// Draws the lines on the paper again: what is marked on them has changed.
+function repaintLines() {
+  for (const el of els.values()) el._ln = null;
+  renderLines();
+}
+const find = (() => {
+  const box = $('find'), input = $('findIn'), nEl = $('findN'), more = $('findMore');
+  let open = false, q = '', hits = [], cur = -1, inDrawer = 0;
+  let folded = { text: null, f: '' };
+  const foldedText = () => {
+    if (folded.text !== S.text) folded = { text: S.text, f: fold(S.text) };
+    return folded.f;
+  };
+  function search() {
+    hits = [];
+    if (q) {
+      const f = foldedText();
+      for (let i = f.indexOf(q); i !== -1 && hits.length < 20000; i = f.indexOf(q, i + q.length)) hits.push({ s: i, e: i + q.length });
+    }
+    inDrawer = drawer.seek(open ? q : null, input.value);
+  }
+  function paint() {
+    S.found = open && hits.length ? { hits, cur } : null;
+    repaintLines();
+    nEl.textContent = !q ? '' : hits.length ? `${cur + 1} of ${hits.length}` : 'Not in this text';
+    more.hidden = !q || !inDrawer;
+    const n = inDrawer === 1 ? 'one text' : inDrawer + ' texts';
+    more.textContent = drawer.open ? `${n} in the drawer` : `also in ${n} in the drawer`;
+    more.disabled = drawer.open;
+  }
+  // the first place at or after the head
+  const near = () => { const i = hits.findIndex(x => x.s >= S.caret); return i < 0 ? 0 : i; };
+  function to(k) {
+    if (!hits.length) return;
+    cur = (k + hits.length) % hits.length;
+    paint();
+    if (!drawer.open) goTo(hits[cur].s);
+  }
+  function start() {
+    if (spread.open) spread.set(false);
+    if (!open) {
+      open = true;
+      box.hidden = false;
+      root.classList.add('finding');
+      $('bFind').setAttribute('aria-expanded', 'true');
+      if (q) { search(); cur = hits.length ? near() : -1; paint(); }
+    }
+    wake();
+    input.focus({ preventScroll: true });
+    input.select();
+  }
+  function close(refocus = true) {
+    if (!open) return;
+    open = false;
+    box.hidden = true;
+    root.classList.remove('finding');
+    $('bFind').setAttribute('aria-expanded', 'false');
+    hits = []; cur = -1;
+    drawer.seek(null);
+    S.found = null;
+    repaintLines();
+    if (refocus) ta.focus({ preventScroll: true });
+  }
+  input.addEventListener('input', () => {
+    q = fold(input.value);
+    search();
+    cur = hits.length ? near() : -1;
+    paint();
+    if (hits.length && !drawer.open) goTo(hits[cur].s);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); to(cur + (e.shiftKey ? -1 : 1)); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+  more.addEventListener('pointerdown', e => e.preventDefault());       // (the find box keeps the keys)
+  more.addEventListener('click', () => { if (!drawer.open) drawer.set(true); });
+  return {
+    get open() { return open; },
+    has: node => box.contains(node),
+    start, close,
+    step(d) { if (!open) start(); else to(cur + d); },
+    // another text is in the machine: look in that one, from its start
+    refresh() {
+      if (!open) return;
+      search();
+      cur = hits.length ? 0 : -1;
+      paint();
+      if (hits.length) setTimeout(() => { if (open && hits[cur]) goTo(hits[cur].s); }, 0);
+    },
+    // the drawer has come out or gone in
+    sync() { if (open) paint(); },
   };
 })();
 
@@ -3677,8 +4013,11 @@ void main() {
 function words(n) {
   return n + (n === 1 ? ' word' : ' words');
 }
+let desktopCheckpoint = 0;
 function persist() {
   clearTimeout(saveTimer);
+  clearTimeout(desktopCheckpoint);
+  desktopCheckpoint = 0;
   if (!behind) {                            // (another tab has written since: see "Two tabs")
     const ok = [store.set(TEXT_KEY, S.text), store.set(AT_KEY, String(S.at)), store.set(TITLE_KEY, S.title)];
     kept('text', ok.every(Boolean));
@@ -3729,6 +4068,24 @@ for (const type of ['pointerdown', 'keydown', 'focus']) window.addEventListener(
 document.addEventListener('visibilitychange', () => { if (!document.hidden) catchUp(); });
 // How much there is; or, with the paper rolled back in a longer text, which page is at the head.
 function paintCount() {
+  if (desktopToolbar) {
+    const wordCount = (S.text.match(/\S+/g) || []).length;
+    const summary = window.typelightCounts.summarize({
+      words: wordCount, texts: drawer.texts + (S.text.trim() ? 1 : 0),
+      libraryWords: drawer.words + wordCount, drawer: drawer.open,
+    });
+    countEl.textContent = summary.label;
+    countEl.title = summary.title;
+    countEl.dataset.exactCount = summary.title;
+    countEl.dataset.librarySummary = summary.librarySummary;
+    return;
+  }
+  if (drawer.open) {                        // with the drawer out: every text, this one and those in the drawer
+    const m = S.text.match(/\S+/g), here = S.text.trim() ? 1 : 0;
+    const n = drawer.texts + here, w = drawer.words + (m ? m.length : 0);
+    countEl.textContent = !n ? 'No texts yet' : (n === 1 ? 'One text, ' : n.toLocaleString('en-US') + ' texts, ') + (w === 1 ? 'one word' : w.toLocaleString('en-US') + ' words') + ' in all';
+    return;
+  }
   const n = pageOf(lastRow()) + 1;
   if (S.scroll || !atEnd()) {
     const at = Math.max(0, Math.min(n - 1, Math.floor((rowY(S.row) - S.scroll + (TOP_ROWS + .5) * S.lh) / S.pitch)));
@@ -3740,6 +4097,10 @@ function paintCount() {
 }
 let saveTimer = 0;
 function touched() {
+  if (desktop) {
+    desktop.markDirty();
+    if (!desktopCheckpoint) desktopCheckpoint = setTimeout(persist, 2000);
+  }
   S.at = Date.now();
   hud.classList.add('quiet');
   clearTimeout(saveTimer);
@@ -3763,6 +4124,7 @@ function paintPrefs() {
 // is Control, because Option and a letter is how characters are typed there.
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || ''), MENU_MOD = MAC ? 'Ctrl' : 'Alt';
 function label(b, text) {
+  b.setAttribute('aria-label', text);
   const k = b.dataset.key, i = k ? text.toLowerCase().indexOf(k) : -1;
   if (i < 0) { b.textContent = text; return; }
   const u = document.createElement('u');
@@ -3780,12 +4142,13 @@ function menuKey(e) {
   if (e.getModifierState && e.getModifierState('AltGraph')) return null;      // AltGr types characters
   // (the letter the key types; on a keyboard without Latin letters, the key where it usually is)
   const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : '';
-  return k ? hud.querySelector(`button[data-key="${k}"]`) : null;
+  return k ? document.querySelector(`button[data-key="${k}"]`) : null;
 }
 
 function soundTitle() {
   if (snd.failed) {
-    return 'The sounds could not be loaded. Open the app over http (for example with python3 -m http.server), not straight from the file.';
+    return desktop ? 'The sound samples could not be loaded. Restart Typelight; if this continues, reinstall the app.' :
+      'The sounds could not be loaded. Open the app over http (for example with python3 -m http.server), not straight from the file.';
   }
   const ms = snd.latency;
   if (ms === null) return 'Typewriter sounds';
@@ -3807,13 +4170,14 @@ function stamp() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 function download(name, content, type) {
+  if (desktop) { desktop.download(name, content, type); return; }
   const url = URL.createObjectURL(new Blob([content], { type }));
   const a = document.createElement('a');
   a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-for (const b of hud.querySelectorAll('button')) {
+for (const b of hud.querySelectorAll('nav button')) {
   b.addEventListener('pointerdown', e => e.preventDefault());   // typing focus stays on the paper
   if (b.textContent) label(b, b.textContent);
   b.title = keyed(b, b.title);
@@ -3829,6 +4193,7 @@ $('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = keye
 // anywhere on the page. A text file is read as UTF-8 and its lines are ended the one way;
 // its name, less the ending, becomes the name of the text.
 function pickFiles() {
+  if (desktop) { desktop.openFiles(); return; }
   const pick = document.createElement('input');
   pick.type = 'file';
   pick.multiple = true;
@@ -3879,7 +4244,9 @@ window.addEventListener('dragover', e => {
 window.addEventListener('drop', e => {
   if (!e.dataTransfer || !e.dataTransfer.files.length) return;
   e.preventDefault();                       // (the browser would leave the page for the file)
-  openFiles([...e.dataTransfer.files]);
+  if (ta.disabled) return;
+  if (desktop) desktop.importFiles([...e.dataTransfer.files]).catch(() => flash('Could not import the file.'));
+  else openFiles([...e.dataTransfer.files]);
 });
 
 // Printing (Cmd/Ctrl+P, or the browser's menu): the sheets are made up just before, from
@@ -3925,10 +4292,11 @@ function flash(msg, ms = 2600) {
 $('bSave').addEventListener('click', saveFile);
 $('bBackup').addEventListener('click', () => drawer.backup());
 $('bOpen').addEventListener('click', pickFiles);
+$('bFind').addEventListener('click', () => { if (find.open) find.close(); else find.start(); });
 $('bNew').addEventListener('click', () => {
   const kept = S.text.trim() !== '';
   drawer.swap(null);                        // nothing is thrown away: the sheet goes into the drawer
-  if (kept) {
+  if (kept && !desktopToolbar) {
     countEl.textContent = 'Put away in the drawer';
     saveTimer = setTimeout(persist, 2600);  // ... and then the word count is back
   }
@@ -3992,6 +4360,9 @@ for (const type of ['keydown', 'pointerdown', 'wheel']) {
 }
 ignite();
 
+// Kept for working without a connection (see sw.js). Not from a file:// page, where it cannot be.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+
 const showName = () => root.classList.add('fonts');
 setTimeout(showName, 450);
 
@@ -4011,6 +4382,34 @@ if (document.fonts) {
   document.fonts.load('700 22px "Courier Prime"').then(showName, showName);
   document.fonts.ready.then(measure);
 }
+if (desktop) desktop.attach({
+  persist,
+  lock(value) {
+    if (value && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    ta.disabled = value; room.inert = value;
+  },
+  importFiles: openFiles,
+  recover(backup) {
+    drawer.bring([backup.machine, ...backup.drawer]);
+    persist();
+  },
+  notice: flash,
+  preparePrint() { const old = $('print'); if (old) old.remove(); printSheets(); },
+  finishPrint() { const old = $('print'); if (old) old.remove(); },
+  command(action) {
+    if (action === 'undo') edits.undo();
+    else if (action === 'redo') edits.redo();
+    else if (action === 'copyText') return S.text;
+    else if (action === 'focus') { drawer.set(false); spread.set(false); find.close(); }
+    else if (/^b(?:Drawer|Pages|New|Open|Save|Backup|Find|Lamp|Sound)$/.test(action)) {
+      const button = $(action);
+      if (action === 'bBackup' || !button.hidden) button.click();
+    }
+    if (action !== 'bFind') ta.focus({ preventScroll: true });
+    wake();
+    return null;
+  },
+});
 })();
 </script>
 </body>

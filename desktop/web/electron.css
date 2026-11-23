@@ -1,0 +1,131 @@
+@import url('toolbar-icons.css');
+
+/* A quiet desktop tool palette. The writing surface is shared with the web app. */
+.electron { color-scheme: dark; }
+/* A brass maker's mark in the wood, beneath the paper and the desk lighting. */
+.electron .desk-mark {
+  position: absolute; z-index: 0;
+  top: clamp(60px, 9vh, 90px); left: calc(50% - 22px);
+  width: 44px; height: 41px; pointer-events: none;
+  filter: drop-shadow(0 -1px 1px #0b0605cc) drop-shadow(0 1px 0 #edc28b99);
+}
+.electron .desk-mark::before {
+  content: ''; display: block; width: 100%; height: 100%;
+  background: linear-gradient(155deg, #f0d5a8, #c49a61 58%, #e0bd86);
+  mask: url('../../logo-mark.svg') center / contain no-repeat;
+}
+@media (max-height: 640px) {
+  .electron .desk-mark { display: none; }
+}
+.electron .window-drag {
+  position: fixed; inset: 0 0 auto; height: 36px; z-index: 20;
+  -webkit-app-region: drag; app-region: drag;
+}
+.electron .hud {
+  left: 50%; right: auto; bottom: 22px; transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 40px); min-height: 54px;
+  box-sizing: border-box; padding: 7px 9px; gap: 9px;
+  border: 1px solid rgba(255, 244, 224, .10); border-radius: 19px;
+  background: linear-gradient(155deg, rgba(57, 51, 43, .78), rgba(27, 25, 23, .87));
+  backdrop-filter: blur(28px) saturate(1.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045), 0 8px 24px rgba(0, 0, 0, .24);
+  font: 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #b9afa0;
+}
+.electron .hud.quiet { opacity: 1; pointer-events: auto; }
+.electron .hud .brand {
+  box-sizing: border-box; flex: 0 0 112px; width: 112px; min-width: 0;
+  gap: 9px; padding: 0 10px 0 9px; height: 26px;
+  border-right: 1px solid rgba(255, 244, 224, .10);
+}
+.electron .hud .name, .electron .hud .mark, .electron .hud .warn { display: none; }
+.electron .hud .count {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+/* Every tool stays present: unavailable tools are disabled, never empty slots. */
+.electron .hud nav {
+  display: grid; grid-template-columns: repeat(8, 36px);
+  gap: 4px; flex: 0 0 auto; align-items: center;
+}
+.electron .hud nav button {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  box-sizing: border-box; flex: 0 0 36px; width: 36px; height: 38px;
+  grid-row: 1;
+  padding: 0; border-radius: 11px; font-size: 0; color: #b9afa0;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.electron .hud nav button[hidden] { display: none; }
+.electron .hud nav button::before {
+  content: ''; display: block; width: 19px; height: 19px;
+  background: currentColor; mask: var(--tool-icon) center / contain no-repeat;
+}
+.electron .hud nav button::after {
+  content: attr(aria-label); position: absolute; bottom: calc(100% + 18px); left: 50%;
+  transform: translate(-50%, 4px); padding: 8px 11px; border-radius: 8px;
+  background: #25221f; color: #e7ddce; border: 1px solid #4a4238;
+  box-shadow: 0 4px 12px #0003; font: 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  white-space: nowrap; pointer-events: none; opacity: 0;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.electron .hud nav button:is(:hover, :focus-visible)::after { opacity: 1; transform: translate(-50%, 0); }
+.electron .hud nav button:hover { background: #fff1db0d; color: #f2e5d2; }
+.electron .hud nav button:active { transform: translateY(1px); }
+.electron .hud nav button:disabled { color: #6e685e; cursor: default; }
+.electron .hud nav button:disabled:hover { background: transparent; }
+.electron .hud nav button:disabled:active { transform: none; }
+.electron .hud nav button[aria-expanded='true'] { background: #ddbe851a; color: #dfc49b; }
+.electron .hud button:focus-visible { outline: 2px solid #d0b58b; outline-offset: 1px; }
+.electron #bDrawer { grid-column: 1; }
+.electron #bPages { grid-column: 2; }
+.electron #bNew { grid-column: 3; }
+.electron #bOpen { grid-column: 4; }
+.electron #bSave { grid-column: 5; }
+.electron #bFind { grid-column: 6; }
+.electron #bLamp { grid-column: 7; }
+.electron #bSound { grid-column: 8; }
+.electron #bSound[aria-label='Sound: off'] { color: #80796e; }
+.electron #bSound[aria-label='Sound: unavailable'] { color: #e6a16e; }
+.electron #bLamp[aria-label='Lamp: low'] { color: #82796a; }
+.electron #bLamp[aria-label='Lamp: full'] { color: #d5bd94; }
+.electron .desktop-status {
+  display: block; flex: 0 0 5px; width: 5px; height: 5px;
+  border-radius: 50%; background: #9baf91; font-size: 0; color: transparent;
+}
+.electron .desktop-status[data-saving='true'] { background: #d0b17d; }
+.electron .desktop-status[data-error='true'] { background: #eea075; }
+.electron .desktop-status[data-error='true']::after {
+  content: 'Not saved — export a copy'; position: absolute; bottom: calc(100% + 14px);
+  left: 0; padding: 10px 14px; border-radius: 10px;
+  background: #34251d; border: 1px solid #9d6848; color: #ffcca5; font-size: 12px;
+}
+.electron .hud .hint { position: absolute; left: 50%; bottom: 73px; transform: translateX(-50%); width: 560px; }
+.electron .hud .find {
+  bottom: 74px; border-radius: 16px; padding: 8px 16px;
+  background: rgba(30, 27, 23, .94); backdrop-filter: blur(20px);
+}
+.electron .drawer-actions {
+  position: relative; z-index: 4; height: 48px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0; padding: 0 20px;
+  font: 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #c8b9a2; background: #17130fb3; border-bottom: 1px solid #d9bf9014;
+}
+.electron .drawer-actions > span { font-weight: 500; letter-spacing: .02em; }
+.electron .drawer-actions button {
+  appearance: none; background: #dfc3970a; border: 1px solid #dec69e24;
+  border-radius: 8px; padding: 7px 10px; font: inherit; color: #d6c5ad; cursor: pointer;
+}
+.electron .drawer-actions button:hover { background: #dfc39718; color: #f0dfc5; }
+.electron .drawer-actions button:focus-visible { outline: 2px solid #d0b58b; outline-offset: 2px; }
+.electron .drawer-actions button[hidden] { display: none; }
+.electron .drawer > .well { height: calc(100% - 48px); }
+@media (prefers-reduced-transparency: reduce) {
+  .electron .hud { background: #25221f; backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .electron .hud nav button, .electron .hud nav button::after { transition: none; }
+}
+@media print {
+  .electron .window-drag, .electron .hud { display: none; }
+}

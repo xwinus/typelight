@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The app icon for launchers that cut their own shape out of it: the ground runs to
+       every edge, and the monogram keeps inside the safe circle in the middle. -->
+  <rect width="64" height="64" fill="#17130f"/>
+  <g fill="#f3e7cf" transform="translate(32 32) scale(.52) translate(-32 -32)">
+    <path d="M6 8h52v15h-6v-7H30v40h-8V16H12v7H6z"/>
+    <path d="M34 20h8v28h10v-7h6v15H34z"/>
+  </g>
+</svg>

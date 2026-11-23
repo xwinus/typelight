@@ -6,7 +6,29 @@ A minimal writing app that behaves like a typewriter in a dim room. The type
 head travels along a rail under the line you are writing, and a small lamp on
 it lights the paper with a warm pool of light.
 
-It is a static page with no build step and no dependencies.
+The web editor is a static page with no build step or dependencies. The desktop
+application uses Electron and shares the same editor on macOS, Windows, and Linux.
+
+## Product direction
+
+The planned commercial product is a desktop writing application sold with a
+one-time purchase, with an interactive web demo on the product website. See
+[Business model](BUSINESS.md) for the audience, offer, pricing hypotheses, and
+validation plan, and [MVP plan](MVP.md) for the required steps before release.
+The application described below is the current web prototype.
+
+## Desktop application
+
+One Electron application targets macOS, Windows, and Linux, with a hidden title
+bar, translucent controls, system file dialogs, and automatic local backups.
+The macOS appearance does not require a separately maintained AppKit version.
+
+Run `npm ci` followed by `npm start` for development. Build installers on the
+target system with `npm run build:mac`, `npm run build:win`, or
+`npm run build:linux`. On macOS, `./install.sh` needs no parameters: it builds,
+asks the previous running version to save and quit, and installs into
+`~/Applications`. See [Desktop setup](DESKTOP.md) for requirements, storage,
+testing, and the remaining release checks.
 
 ## Run it
 
@@ -18,8 +40,11 @@ then go to <http://localhost:8000>. Opening `index.html` straight from disk
 also works, but without sound: browsers do not let a page read the sample
 files from a `file://` address.
 
-The typeface (Courier Prime) is loaded from Google Fonts; offline it falls back
-to the system Courier.
+Everything it needs is in the folder, the typeface included (Courier Prime, in
+`fonts/`, under the SIL Open Font License: see `fonts/OFL.txt`). Opened over
+http(s), the page keeps a copy of itself and of everything it loads (`sw.js`),
+so after the first visit it works without a connection, and browsers that
+offer it can install it as an app.
 
 ## How it works
 
@@ -81,6 +106,18 @@ to the system Courier.
   texts back into the drawer. Nothing is replaced: a text that is already
   there is not brought in twice. The balls of paper on the floor are not
   backed up.
+- "Find" (or Cmd/Ctrl+F) looks for a word in the text in the machine. Every
+  place it is gets marked, as with a highlighter, and Enter, Shift+Enter or
+  Cmd/Ctrl+G take the head from one to the next. Neither capitals nor accents
+  count: "zivot" finds "Život". If texts in the drawer have the word too, it
+  says how many; with the drawer out, those stand out and the rest are in
+  shadow. Typing, or Esc, puts the word away.
+- With the drawer out, the word count is that of every text, the one in the
+  machine and those in the drawer.
+- Pointing at a ball of paper on the floor says what is on it and when it goes
+  for good, and when the oldest has three days or less left, the drawer says
+  so as it comes out. "Sweep the floor" throws every ball away for good, after
+  a second click to be sure.
 - Printing (Cmd/Ctrl+P) prints the text in the machine on A4, as it lies in
   the machine: Courier at ten characters to the inch, 62 to a line, the pages
   from the second on numbered. "Save as PDF" in the print dialog makes a PDF.
@@ -93,8 +130,10 @@ to the system Courier.
 - Each item of the menu has a letter underlined. Alt and that letter works
   the item from the keyboard (on a Mac it is Control, because Option and a
   letter types characters there): P for the pages, D for the drawer, L for
-  the lamp, O for the sound, F to open a file, S to save, N for a new text,
-  and with the drawer out B to back up.
+  the lamp, O for the sound, I to find, F to open a file, S to save, N for a
+  new text, and with the drawer out B to back up. With the drawer out, "Back
+  up" takes the place of "Save .txt", and the blank sheet on top of the pile
+  that of "New text".
 - Opening the app with `#demo` at the end of the address fills the drawer
   with sample texts to try it on; nothing is read or saved in that mode.
 
@@ -114,9 +153,10 @@ The table under the sheet is a CC0 scan from [Poly Haven](https://polyhaven.com)
 
 ## Status
 
-An early prototype. Checked in desktop Chrome; not yet tested on a real phone
-or with very long manuscripts. The drawer lives in one browser: there is no
-sync, and two tabs open at once will overwrite each other's drawer.
+An early prototype. Desktop builds share one implementation, but each target
+still requires installation and runtime checks before a public release. The
+web editor has been checked in desktop Chrome; real phones and very long
+manuscripts need further testing. Documents stay on the device; there is no sync.
 
 ## License
 
