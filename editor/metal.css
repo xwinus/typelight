@@ -1,0 +1,37 @@
+.rail {
+  left: max(-56px, calc(18px - var(--rail-left)));
+  right: max(-56px, calc(18px - var(--rail-left)));
+  top: calc(var(--ly) + var(--lh) + 12px);
+  height: 6px; border-radius: 3px; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, #ffffff04 0 .5px, #00000008 .5px 1px, transparent 1px 2px),
+    linear-gradient(#55534f, #96928a 24%, #79756f 40%, #45433f 72%, #262522);
+  box-shadow: 0 1px 1px #15120e66, 0 4px 6px #15120e38;
+}
+.rail canvas {
+  display: block; width: 100%; height: 100%; border-radius: inherit;
+  visibility: hidden; pointer-events: none;
+}
+.rail.metal-ready canvas { visibility: visible; }
+.rail::before, .rail::after {
+  top: -5px; width: 9px; height: 17px; border-radius: 2px;
+  background: linear-gradient(90deg, #46433d, #777268 27%, #514d46 65%, #302e29);
+  box-shadow: inset 0 1px #c2bba22e, inset 0 -1px #15130f70, 0 2px 3px #0003;
+}
+.rail::before { left: -2px; }
+.rail::after { right: -2px; }
+.block {
+  left: calc(var(--chw) / 2 - 37px); top: calc(var(--lh) + 4px);
+  width: 74px; height: 24px; border-radius: 5px 5px 8px 8px;
+  background:
+    radial-gradient(ellipse at 50% -20%, #ddc39c26, transparent 65%),
+    repeating-linear-gradient(0deg, #ffffff02 0 .5px, transparent .5px 2px),
+    linear-gradient(#45413b, #302d29 35%, #1c1b19 85%);
+  box-shadow: inset 1px 0 #e5d7c00b, inset -1px 0 #0003,
+    inset 0 -1px #09080680, 0 6px 10px -2px #0006;
+}
+.block::after {
+  top: 9px; height: 9px; background: #c5a46f80;
+  box-shadow: -1px 0 #18130d70;
+}
+@media print { .rail { display: none; } }

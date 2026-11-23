@@ -7,6 +7,7 @@ const { app, dialog } = require('electron');
 const { checkToolbarStability } = require('./toolbar-layout.cjs');
 const { checkSelection } = require('./selection-runtime.cjs');
 const { checkAccessibility } = require('./accessibility-runtime.cjs');
+const { checkMetal } = require('./metal-runtime.cjs');
 const { start } = require(process.env.TYPELIGHT_TEST_APP ?
   path.join(process.env.TYPELIGHT_TEST_APP, 'desktop/electron/main.cjs') : '../desktop/electron/main.cjs');
 
@@ -274,13 +275,15 @@ async function run() {
     'New Text must work directly from the drawer');
   await checkToolbarStability(toolsWindow, runtime.command);
   await checkSelection(toolsWindow, runtime.command);
+  await checkMetal(toolsWindow);
   await checkAccessibility(toolsWindow, runtime, watchErrors);
   assert.deepEqual(layoutIssues, [], 'Desktop layout regressions');
   assert.deepEqual(pageErrors, [], 'Unexpected renderer errors');
   console.log('Electron smoke: native migration, renderer isolation, 42 FLAC samples, playback, ' +
     'missing/forbidden assets, typing, autosave, undo/redo, close flush, reopen, focused rename, ' +
     '1180/900px editor/drawer layouts, selection, clipboard, composition, accessible navigation, ' +
-    'modal help, reading contrast, 200% zoom, tooltips, save announcements, and renderer console checks passed.');
+    'modal help, reading contrast, 200% zoom, metal rendering and context recovery, ' +
+    'tooltips, save announcements, and renderer console checks passed.');
   finish();
 }
 

@@ -170,7 +170,7 @@ including button bounds and overlapping controls. All
 a running AudioContext. Physical speaker output and audible quality still
 need a listening pass.
 
-The latest unit suite passes 99 tests. Selection checks cover mouse dragging,
+The latest unit suite passes 105 tests. Selection checks cover mouse dragging,
 double-click, keyboard and native-menu selection, plain-text copy/cut, replacement,
 multi-page ranges, and restoring backward selections through undo. Unit tests
 also verify grapheme boundaries and preservation of text after clipboard errors.
@@ -186,6 +186,8 @@ reopening without changing the document. Routine autosaves are silent to screen
 readers; save failures and completed recovery have separate announcements.
 Drawer names are concise, with metadata exposed separately. These automated
 checks do not replace hands-on VoiceOver and NVDA testing before release.
+Metal rendering checks cover GPU buffer limits and allocation failures, carriage
+tracking, reading illumination, and loss and restoration of the WebGL context.
 The installed help dialog and even reading light were also inspected visually
 on macOS, then the original appearance was restored without editing the text.
 The packaged Mac application's ASAR is

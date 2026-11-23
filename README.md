@@ -95,6 +95,12 @@ offer it can install it as an app.
   raking light that picks out the texture of the paper. The lamp in the
   drawer and the desk lamp over the pages are worked out the same way.
   Without WebGL the app falls back to plain gradients.
+- The carriage runs on a rounded brushed-steel rail. A small WebGL surface
+  renders its subtle moving reflection beneath the shared scene lighting, so
+  the rail and its mounts fade into the same shadows as the paper and desk.
+  It redraws during movement and lighting changes, then rests. Metal end mounts
+  and the carriage share the same finish; CSS keeps the mechanism visible if
+  WebGL is unavailable or its context is lost.
 - The sounds are recordings of real typewriters. Each strike plays a different
   take, the carriage return is timed to the head's travel, and a bell rings
   eight columns before the right margin.

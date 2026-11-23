@@ -677,6 +677,8 @@
   }
 </style>
 <link rel="stylesheet" href="editor/accessibility.css">
+<link rel="stylesheet" href="editor/metal.css">
+<script src="editor/metal.js"></script>
 <script src="editor/selection.js"></script>
 <script src="editor/accessibility.js"></script>
 <script src="editor/tooltips.js"></script>
@@ -698,7 +700,7 @@
     <div class="cut"><div class="pages" id="pages"></div></div>
     <div class="under" id="under"></div>
     <div class="lines" id="lines" aria-hidden="true"></div>
-    <div class="rail"></div>
+    <div class="rail" aria-hidden="true"></div>
   </div>
 
   <canvas class="light-gl" id="gl" aria-hidden="true"></canvas>
@@ -1420,6 +1422,7 @@ function measure() {
   S.left = Math.round((S.vw - W) / 2);
   stage.style.left = S.left + 'px';
   stage.style.width = W + 'px';
+  root.style.setProperty('--rail-left', S.left + 'px');
   linesEl.style.left = margin * chw + 'px';
   root.style.setProperty('--chw', chw + 'px');
   root.style.setProperty('--lh', lh + 'px');
@@ -4386,6 +4389,7 @@ drawerLight.init();
 spread.init();
 measure();
 accessibility.initialize();
+TypelightMetal.install({ rail: document.querySelector('.rail'), head, shading: $('gl') });
 persist();
 ta.focus({ preventScroll: true });
 pinCaret();
