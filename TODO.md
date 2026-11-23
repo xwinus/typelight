@@ -3,19 +3,6 @@
 What is still missing, roughly in the order it would be missed by someone
 writing something they care about.
 
-## Keeping the text safe
-
-- [ ] Back up and restore the whole drawer. "Save .txt" saves only the text
-      in the machine; everything else lives in the browser's storage and is
-      gone when the site data is cleared.
-- [ ] Two tabs open at once overwrite each other's drawer. Notice the other
-      tab and either follow it or warn.
-- [ ] Say so when the text in the machine could not be saved (storage full or
-      blocked). The drawer already does; the text in the machine fails
-      silently.
-- [ ] Undo (Cmd/Ctrl+Z). It is left to the browser and has never been checked
-      after a correction in the middle of a text.
-
 ## Getting text in and out
 
 - [ ] Open a .txt file. Today a text can only be pasted in.
@@ -43,7 +30,11 @@ writing something they care about.
 
 ## To check
 
-- [ ] Czech diacritics typed with dead keys in the middle of a text.
+- [ ] Czech diacritics typed with dead keys in the middle of a text. Passes
+      with composition simulated in Chrome (including undo); not yet tried on
+      a real keyboard.
+- [ ] Undo from the browser's Edit menu, and by shaking a phone. Both should
+      come to the page's own undo through `beforeinput`; untested.
 - [ ] A real phone and a touch screen: rolling the paper, the drawer, the
       pages.
 - [ ] Firefox and Safari.

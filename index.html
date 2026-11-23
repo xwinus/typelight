@@ -267,6 +267,8 @@
   .hud .brand { display: flex; align-items: center; gap: 9px; padding: 8px 10px; white-space: nowrap; }
   .hud .mark { width: 17px; height: 16px; flex: none; margin-top: -2px; fill: rgba(243,231,207,.82); }
   .hud .name { color: rgba(243,231,207,.82); margin-right: 9px; }
+  .hud .warn { margin-left: 14px; color: rgba(255,168,120,.92); cursor: help; }   /* the browser would not keep the text */
+  .hud .warn[hidden] { display: none; }
   .hud .hint {                   /* how the drawer works, shown while it is out */
     flex: 1; min-width: 0; padding: 8px 4px; text-align: center; line-height: 1.35;
     opacity: 0; transition: opacity .35s ease;
@@ -620,11 +622,14 @@
       </svg>
       <span class="name">Typelight</span>
       <span class="count" id="count">0 words</span>
+      <span class="warn" id="warn" role="status" hidden>Not saved in this browser</span>
     </div>
     <span class="hint" id="hint" aria-live="polite"></span>
     <nav>
       <button type="button" id="bPages" data-key="p" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
       <button type="button" id="bDrawer" data-key="d" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
+      <button type="button" id="bBackup" data-key="b" title="Download every text, the one in the machine and those in the drawer, as one file" hidden>Back up</button>
+      <button type="button" id="bRestore" data-key="r" title="Bring the texts of a backup into the drawer; nothing here is replaced" hidden>Restore</button>
       <button type="button" id="bLamp" data-key="l" title="Lamp brightness"></button>
       <button type="button" id="bSound" data-key="o" title="Typewriter sounds"></button>
       <button type="button" id="bSave" data-key="s" title="Download the text as a file">Save .txt</button>
@@ -1511,7 +1516,56 @@ const panOf = col => (col / Math.max(1, S.cols) - .5) * .5;
  * that can only type where the head is.
  * ------------------------------------------------------------------ */
 let composing = false;
+let composedFrom = null; // the text as it was when the browser began to put a character together
 let struck = null;       // the sound already played on key down for the input that follows
+
+// Undo. The browser's own would do, but it ends a step whenever anything is added to the
+// page between two keys, and every letter struck is: it would take a word back a letter
+// at a time. So the steps are kept here instead. A run of typing in one place is one step,
+// up to a new line, and so is a run of rubbing out; a character put together from a dead
+// key joins the run it continues. A step is the text as it was before it, and where the head was.
+const edits = (() => {
+  const MAX = 500;
+  let back = [], fwd = [], run = null;      // run: what the last change was, and where it left off
+  let replaying = false;
+  // (at: where the head is after the change; it tells where a letter went in a run of the same ones)
+  function note(before, caret, after, at) {
+    if (replaying) return;
+    const least = Math.min(before.length, after.length);
+    let p = 0, q = 0;
+    while (p < least && before.charCodeAt(p) === after.charCodeAt(p)) p++;
+    while (q < least - p && before.charCodeAt(before.length - 1 - q) === after.charCodeAt(after.length - 1 - q)) q++;
+    const del = before.length - p - q, add = after.length - p - q;
+    const kind = add && !del ? 'type' : del && !add ? 'rub' : 'other';
+    const goesOn = run && kind === run.kind && (
+      kind === 'type' ? at - add === run.at && after[at - add] !== '\n' :
+      kind === 'rub' ? at + del === run.at || at === run.at :      // (rubbing out backwards, or forwards)
+      false);
+    if (!goesOn) {
+      back.push({ text: before, caret });
+      if (back.length > MAX) back.shift();
+    }
+    fwd = [];
+    run = { kind, at };
+  }
+  function step(from, to) {
+    const s = from.pop();
+    if (!s) return;
+    to.push({ text: S.text, caret: S.caret });
+    run = null;
+    replaying = true;
+    ta.value = s.text;
+    ta.setSelectionRange(s.caret, s.caret);
+    onInput();
+    replaying = false;
+  }
+  return {
+    note,
+    undo: () => step(back, fwd),
+    redo: () => step(fwd, back),
+    reset() { back = []; fwd = []; run = null; },
+  };
+})();
 
 const returnTravel = cols => Math.max(.25, Math.min(1, cols / S.cols)) * RETURN_SWEEP;
 
@@ -1542,6 +1596,11 @@ function onInput() {
     ta.setSelectionRange(c, c);
   }
   const old = S.text;
+  if (!composing) {                         // (a character being put together is noted once it is done)
+    const from = composedFrom || { text: old, caret: S.caret };
+    composedFrom = null;
+    if (from.text !== v) edits.note(from.text, from.caret, v, ta.selectionEnd);
+  }
   if (v === old) return;
 
   // what went and what came: the two texts are alike up to p, and again from q characters before their ends
@@ -1613,6 +1672,7 @@ function onInput() {
 
 // Puts a whole other text on the sheet at once and without a sound: a sheet from the drawer.
 function setText(text) {
+  edits.reset();                            // (what was done to another text cannot be undone on this one)
   for (const el of els.values()) el.remove();
   els.clear();
   ta.value = text;
@@ -1754,12 +1814,19 @@ function toPage(d) {
 }
 
 ta.addEventListener('input', onInput);
-ta.addEventListener('compositionstart', () => { composing = true; });
+ta.addEventListener('compositionstart', () => { composing = true; composedFrom = { text: S.text, caret: S.caret }; });
 ta.addEventListener('compositionend', () => {
   composing = false;
   onInput();
   snd.key(panOf(S.col));
   thud();
+});
+// ... and from the Edit menu, or by shaking a phone
+ta.addEventListener('beforeinput', e => {
+  if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
+    e.preventDefault();
+    if (e.inputType === 'historyUndo') edits.undo(); else edits.redo();
+  }
 });
 ta.addEventListener('select', pinCaret);
 ta.addEventListener('focus', pinCaret);
@@ -1769,6 +1836,11 @@ ta.addEventListener('keydown', e => {
   const k = e.key, mod = e.metaKey || e.ctrlKey;
   if (mod && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
   if (mod && (k === 'a' || k === 'A')) { e.preventDefault(); return; }
+  // undo and redo, kept by the page (see "Undo"): Cmd+Z and Cmd+Shift+Z on a Mac; Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z elsewhere
+  if ((MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey && !composing) {
+    const z = k === 'z' || k === 'Z', y = !MAC && (k === 'y' || k === 'Y');
+    if (z || y) { e.preventDefault(); if (y || e.shiftKey) edits.redo(); else edits.undo(); return; }
+  }
   if (drawer.open) {
     if (k === 'Tab') return;                // on to the sheets in the drawer
     if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); drawer.roll(k === 'ArrowUp' ? -1 : 1); return; }
@@ -2762,7 +2834,10 @@ const drawer = (() => {
     } catch { /* an empty drawer */ }
   }
   function save() {
-    if (!store.set(PILE_KEY, JSON.stringify({ v: 1, pile: sheets, bin }))) say('Could not save the drawer in this browser.', 8000);
+    if (behind) return;                       // another tab has written since: see "Two tabs"
+    const ok = store.set(PILE_KEY, JSON.stringify({ v: 1, pile: sheets, bin }));
+    kept('drawer', ok);
+    if (!ok) say('Could not save the drawer in this browser.', 8000);
   }
 
   /* ---- what is said in the controls while the drawer is out ---- */
@@ -2892,6 +2967,7 @@ const drawer = (() => {
     el.inert = binEl.inert = !v;
     btn.setAttribute('aria-expanded', v);
     label(btn, v ? 'Close drawer' : 'Drawer');
+    $('bBackup').hidden = $('bRestore').hidden = !v;
     if (!v) ta.focus({ preventScroll: true });
     drawerLight.set(v);
     if (!reduce) snd.drawer(v, v ? .74 : .42);      // when it reaches its stop: as timed in the stylesheet
@@ -3179,13 +3255,63 @@ const drawer = (() => {
   btn.addEventListener('click', () => set(!open));
   $('desk').addEventListener('click', () => { if (!dragged) set(false); });
 
+  /* ---- a copy kept outside the browser ---- */
+  // Every text, the one in the machine and those in the drawer, in one file. What lies on
+  // the floor is left out: it was thrown away.
+  function backup() {
+    persist();
+    const machine = { text: S.text, at: S.at, ...(S.title && { title: S.title }) };
+    const n = sheets.length + (S.text.trim() ? 1 : 0);
+    download('typelight-backup-' + stamp() + '.json', JSON.stringify({ typelight: 1, saved: new Date().toISOString(), machine, drawer: sheets }, null, 1), 'application/json');
+    say(n ? `Backed up ${n === 1 ? 'one text' : n + ' texts'} to a file.` : 'There is nothing to back up yet.', 4000);
+  }
+  // The texts of a backup go on top of the pile, in their order there. Nothing here is
+  // replaced or thrown away; a text that is here already (in the machine or the drawer)
+  // is not brought in twice.
+  function restore(data) {
+    if (!data || data.typelight !== 1 || !Array.isArray(data.drawer)) {
+      say('That file is not a Typelight backup.', 6000);
+      return;
+    }
+    const all = [data.machine, ...data.drawer].filter(x => x && typeof x.text === 'string' && x.text.trim());
+    const here = new Set([S.text, ...sheets.map(x => x.text)]), ids = new Set(sheets.map(x => x.id));
+    const add = [];
+    for (const x of all) {
+      if (here.has(x.text)) continue;
+      here.add(x.text);
+      const id = typeof x.id === 'string' && x.id && !ids.has(x.id) ? x.id : uid();
+      ids.add(id);
+      const title = typeof x.title === 'string' ? x.title.trim() : '';
+      add.push({ id, text: x.text, at: Number.isFinite(x.at) ? x.at : Date.now(), ...(title && { title }) });
+    }
+    const had = all.length - add.length;
+    if (!add.length) {
+      say(all.length ? 'Every text in that backup is here already.' : 'That backup is empty.', 6000);
+      return;
+    }
+    letGo();
+    sheets.unshift(...add);
+    save();
+    render();
+    well.scrollTop = 0;
+    snd.tick();
+    say((add.length === 1 ? 'One text' : add.length + ' texts') + ' from the backup, on top of the pile.' +
+      (had ? ` (${had === 1 ? 'One was' : had + ' were'} here already.)` : ''), 7000);
+  }
+  // Read again from storage: another tab has changed it.
+  function reload() {
+    letGo();
+    load();
+    render();
+  }
+
   load();
   render();
 
   return {
     get open() { return open; },
     get naming() { return !!naming; },
-    set, swap, arrange, letGo,
+    set, swap, arrange, letGo, backup, restore, reload,
     has: node => el.contains(node) || binEl.contains(node),
     roll: lines => well.scrollBy({ top: lines * pitch(), behavior: reduce ? 'auto' : 'smooth' }),
   };
@@ -3497,12 +3623,54 @@ function words(n) {
 }
 function persist() {
   clearTimeout(saveTimer);
-  store.set(TEXT_KEY, S.text);
-  store.set(AT_KEY, String(S.at));
-  store.set(TITLE_KEY, S.title);
+  if (!behind) {                            // (another tab has written since: see "Two tabs")
+    const ok = [store.set(TEXT_KEY, S.text), store.set(AT_KEY, String(S.at)), store.set(TITLE_KEY, S.title)];
+    kept('text', ok.every(Boolean));
+  }
   paintCount();
   spread.sync();
 }
+
+// What the browser would not store (it is full, or storage is switched off for the site)
+// is said beside the word count until it can be stored again. The controls come back to
+// say it whenever typing stops.
+const unsaved = new Set();
+function kept(what, ok) {
+  if (ok) unsaved.delete(what); else unsaved.add(what);
+  const w = $('warn');
+  w.hidden = !unsaved.size;
+  w.title = 'This browser would not store ' + (unsaved.size > 1 ? 'the text or the drawer' : unsaved.has('text') ? 'the text in the machine' : 'the drawer') +
+    ': its storage is full, or switched off for this site. Save .txt, or Back up in the drawer, keeps a copy in a file.';
+  if (!ok) wake();
+}
+
+// Two tabs. Each tab of the app keeps its texts in the same storage, and the browser tells
+// the others when one writes. What another tab wrote is newer than what this one holds,
+// so this one stops saving, not to write over it, and takes it up the moment it is used
+// again: the text in the machine, the drawer and the floor, as they are now.
+let behind = false;
+window.addEventListener('storage', e => {
+  if (DEMO || e.storageArea !== localStorage) return;
+  if (e.key === PREF_KEY) { readPrefs(); paintPrefs(); return; }
+  if (e.key === null || e.key === TEXT_KEY || e.key === AT_KEY || e.key === TITLE_KEY || e.key === PILE_KEY) behind = true;
+});
+function catchUp() {
+  if (!behind) return;
+  behind = false;
+  clearTimeout(saveTimer);
+  const text = store.get(TEXT_KEY) || '';
+  S.at = Number(store.get(AT_KEY)) || Date.now();
+  S.title = store.get(TITLE_KEY) || '';
+  if (text !== S.text) setText(text);
+  drawer.reload();
+  paintCount();
+  spread.sync();
+  countEl.textContent = 'Brought up to date from another tab';
+  saveTimer = setTimeout(persist, 2600);    // ... and then the word count is back
+}
+// (before anything else the key or the click would do)
+for (const type of ['pointerdown', 'keydown', 'focus']) window.addEventListener(type, catchUp, true);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) catchUp(); });
 // How much there is; or, with the paper rolled back in a longer text, which page is at the head.
 function paintCount() {
   const n = pageOf(lastRow()) + 1;
@@ -3570,13 +3738,32 @@ function soundTitle() {
 
 function saveFile() {
   persist();
+  download('typelight-' + stamp() + '.txt', S.text, 'text/plain;charset=utf-8');
+}
+function stamp() {
   const d = new Date(), pad = n => String(n).padStart(2, '0');
-  const name = `typelight-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.txt`;
-  const url = URL.createObjectURL(new Blob([S.text], { type: 'text/plain;charset=utf-8' }));
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function download(name, content, type) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const a = document.createElement('a');
   a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// A backup file, chosen by the person, read and handed to the drawer.
+function openBackup() {
+  const pick = document.createElement('input');
+  pick.type = 'file';
+  pick.accept = '.json,application/json';
+  pick.addEventListener('change', async () => {
+    const f = pick.files && pick.files[0];
+    if (!f) return;
+    let data = null;
+    try { data = JSON.parse(await f.text()); } catch { /* not a backup: the drawer says so */ }
+    drawer.restore(data);
+  });
+  pick.click();
 }
 
 for (const b of hud.querySelectorAll('button')) {
@@ -3592,6 +3779,8 @@ $('bSound').addEventListener('click', () => {
 });
 $('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = keyed(e.currentTarget, soundTitle()); });
 $('bSave').addEventListener('click', saveFile);
+$('bBackup').addEventListener('click', () => drawer.backup());
+$('bRestore').addEventListener('click', openBackup);
 $('bNew').addEventListener('click', () => {
   const kept = S.text.trim() !== '';
   drawer.swap(null);                        // nothing is thrown away: the sheet goes into the drawer
@@ -3610,11 +3799,14 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) persi
 /* ------------------------------------------------------------------ *
  * Start
  * ------------------------------------------------------------------ */
-try {
-  const p = JSON.parse(store.get(PREF_KEY) || '{}');
-  if (typeof p.sound === 'boolean') S.sound = p.sound;
-  if (Number.isInteger(p.lamp) && p.lamp >= 0 && p.lamp < LAMPS.length) S.lamp = p.lamp;
-} catch { /* defaults */ }
+function readPrefs() {
+  try {
+    const p = JSON.parse(store.get(PREF_KEY) || '{}');
+    if (typeof p.sound === 'boolean') S.sound = p.sound;
+    if (Number.isInteger(p.lamp) && p.lamp >= 0 && p.lamp < LAMPS.length) S.lamp = p.lamp;
+  } catch { /* defaults */ }
+}
+readPrefs();
 paintPrefs();
 
 snd.load().then(paintPrefs);

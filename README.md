@@ -67,12 +67,26 @@ to the system Courier.
   Alt+arrows to move one, F2 to name it, Delete to throw it away, Enter to
   take it. On a touch screen, hold a text to pick it up.
 - Everything is saved in the browser's local storage as you type, on this
-  device only. "Save .txt" (or Cmd/Ctrl+S) downloads the text in the machine
+  device only. If the browser will not keep it (its storage is full, or
+  switched off for the site), "Not saved in this browser" says so beside the
+  word count. "Save .txt" (or Cmd/Ctrl+S) downloads the text in the machine
   as a plain text file, all its pages in one.
+- With the drawer out, "Back up" downloads every text, the one in the machine
+  and those in the drawer, as one JSON file, and "Restore" brings the texts
+  of such a file back into the drawer, on top of the pile. Restoring replaces
+  nothing: a text that is already there is not brought in twice. The balls of
+  paper on the floor are not backed up.
+- The app can be open in several tabs. When one tab saves, the others stop
+  saving, so as not to write over it, and take up what it saved as soon as
+  they are used again.
+- Undo and redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y) go back a run of typing
+  or of rubbing out at a time, up to a new line. Taking another text into the
+  machine starts its undo afresh.
 - Each item of the menu has a letter underlined. Alt and that letter works
   the item from the keyboard (on a Mac it is Control, because Option and a
   letter types characters there): P for the pages, D for the drawer, L for
-  the lamp, O for the sound, S to save, N for a new text.
+  the lamp, O for the sound, S to save, N for a new text, and with the drawer
+  out B to back up and R to restore.
 - Opening the app with `#demo` at the end of the address fills the drawer
   with sample texts to try it on; nothing is read or saved in that mode.
 
