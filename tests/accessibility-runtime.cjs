@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { app, Menu } = require('electron');
 const { once } = require('node:events');
+const { checkReadingAnimation } = require('./reading-animation-runtime.cjs');
 
 async function checkAccessibility(window, runtime, watchErrors) {
   let win = window;
@@ -98,6 +99,7 @@ async function checkAccessibility(window, runtime, watchErrors) {
     }
   };
   await checkHelp(1);
+  await checkReadingAnimation(win, runtime.command);
 
   // The toolbar switches the even reading light too, and the native menu follows it.
   await evaluate("document.getElementById('bRead').click()");
@@ -111,7 +113,7 @@ async function checkAccessibility(window, runtime, watchErrors) {
   assert.equal(Menu.getApplicationMenu().getMenuItemById('readingMode').checked, false);
 
   await runtime.command('readingMode');
-  await pause(120);
+  await pause(750);
   assert.equal(Menu.getApplicationMenu().getMenuItemById('readingMode').checked, true);
   const reading = await evaluate(`(() => {
     const first=document.querySelector('#lines .ln'), sheet=document.querySelector('.sheet');

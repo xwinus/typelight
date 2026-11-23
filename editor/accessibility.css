@@ -48,9 +48,19 @@
 }
 .tool-help[hidden] { display: none; }
 .tool-help::before { content: ''; position: absolute; inset: -9px 0; z-index: -1; }
+/* Fade the shading itself so both GPU lighting and its gradient fallback soften together. */
+.light-gl, .light, .drawer-gl, .drawer-glow, .spread-gl {
+  opacity: 1;
+  transition: opacity .65s ease-in-out, visibility 0s;
+}
 .reading-mode .light-gl, .reading-mode .light, .reading-mode .drawer-gl,
-.reading-mode .drawer-glow, .reading-mode .spread-gl { visibility: hidden !important; }
-.reading-mode .haze { display: none; }
+.reading-mode .drawer-glow, .reading-mode .spread-gl {
+  opacity: 0; visibility: hidden;
+  transition: opacity .65s ease-in-out, visibility 0s .65s;
+}
+.haze { transition: opacity .65s ease-in-out; }
+.reading-mode .haze { opacity: 0; }
+.sheet { transition: background-color .65s ease-in-out; }
 .reading-mode { --ink: #241c14; }
 .reading-mode .sheet, .reading-mode .leaf { background-color: #f5eddb; background-image: none; }
 .reading-mode .ln, .reading-mode .leaf .body { color: #241c14; text-shadow: none; }
@@ -70,5 +80,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .rail, .block { animation: none !important; }
+  .light-gl, .light, .drawer-gl, .drawer-glow, .spread-gl, .haze, .sheet {
+    transition: none !important;
+  }
 }
 @media print { .reading-help-button, .reading-help, .tool-help { display: none !important; } }

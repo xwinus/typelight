@@ -69,7 +69,8 @@ offer it can install it as an app.
 - The question mark in the upper-right corner (or F1) opens reading options and
   keyboard help; in the desktop app it sits in the title bar, opposite the
   window's own buttons. Even reading light removes shading and distressed ink
-  for clearer text and selection. "Reading" in the menu (Alt/Control+R, and
+  for clearer text and selection. Lighting fades smoothly in both directions;
+  reduced motion makes the switch immediate. "Reading" in the menu (Alt/Control+R, and
   Cmd/Ctrl+Shift+R in the desktop app) switches it too. Size controls offer 75–200% scaling: the whole
   interface on desktop, text on the web. Cmd/Ctrl+Plus, Minus, and 0 adjust or
   reset it. Reading preferences are remembered outside demo mode.

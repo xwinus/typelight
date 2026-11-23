@@ -5,7 +5,7 @@
 // new version in its address), so it comes from here first.
 //
 // Change CACHE when the list below changes: the old cache is then thrown away.
-const CACHE = 'typelight-3';
+const CACHE = 'typelight-4';
 const SHELL = [
   './',
   'editor/selection.js',
