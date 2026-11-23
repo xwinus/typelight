@@ -569,6 +569,35 @@
     .desk, .drawer, .drawer-open .desk, .drawer-open .drawer, .leaf, .bin, .drawer-open .bin, .ball, .spread, .pages-open .spread, .mini { transition: none; }
     .splash { animation-duration: .01s; animation-delay: 1s; }
   }
+
+  /* ---------- printing ---------- */
+  /* The text in the machine on A4, as it lies in the machine: Courier at ten characters to
+     the inch (12pt), 62 to a line, an inch in from either edge; the lines as far apart, and
+     as many to a sheet, as on the screen. The sheets are made up just before printing (see
+     "Printing" in the script). */
+  .print { display: none; }
+  @media print {
+    @page { size: A4; margin: 0; }
+    html, body { height: auto; overflow: visible; background: #fff; }
+    body { position: static; }
+    body > :not(.print) { display: none !important; }
+    .print {
+      display: block; color: #000;
+      font: 12pt/20.64pt "Courier Prime", "Courier New", Courier, monospace;      /* 20.64pt: 1.72 lines, as on the screen */
+      font-variant-ligatures: none;
+    }
+    .print .pg {
+      position: relative; width: 210mm; height: 296mm; overflow: hidden;      /* (a hair short of A4: no blank sheet after each) */
+      padding: calc(20.64pt * 3) 0 0 calc((210mm - 62 * 7.2pt) / 2);
+      white-space: pre;
+      break-after: page;
+    }
+    .print .pg:last-child { break-after: auto; }
+    .print .pn {                 /* the number, from the second sheet on, as the pencil puts it */
+      position: absolute; top: 24pt; right: calc((210mm - 62 * 7.2pt) / 2);
+      font: italic 10pt/1 "Courier Prime", "Courier New", Courier, monospace; color: #666;
+    }
+  }
 </style>
 </head>
 <body>
@@ -629,9 +658,9 @@
       <button type="button" id="bPages" data-key="p" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
       <button type="button" id="bDrawer" data-key="d" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
       <button type="button" id="bBackup" data-key="b" title="Download every text, the one in the machine and those in the drawer, as one file" hidden>Back up</button>
-      <button type="button" id="bRestore" data-key="r" title="Bring the texts of a backup into the drawer; nothing here is replaced" hidden>Restore</button>
       <button type="button" id="bLamp" data-key="l" title="Lamp brightness"></button>
       <button type="button" id="bSound" data-key="o" title="Typewriter sounds"></button>
+      <button type="button" id="bOpen" data-key="f" title="Open a text file, or a backup; files can also be dropped on the page">Open file</button>
       <button type="button" id="bSave" data-key="s" title="Download the text as a file">Save .txt</button>
       <button type="button" id="bNew" data-key="n" title="Put this text away in the drawer and start another on a blank sheet">New text</button>
     </nav>
@@ -1863,6 +1892,11 @@ ta.addEventListener('keydown', e => {
 
 // keep the machine under the fingers
 document.addEventListener('keydown', e => {
+  if ((MAC ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === 'o' || e.key === 'O')) {
+    e.preventDefault();                     // (not the browser's own Open)
+    if (!e.repeat) pickFiles();
+    return;
+  }
   if (drawer.naming) return;                // a name is being written on a slip: the keys are its own
   const item = menuKey(e);
   if (item) {                               // the menu (and nothing reaches the paper)
@@ -2967,7 +3001,7 @@ const drawer = (() => {
     el.inert = binEl.inert = !v;
     btn.setAttribute('aria-expanded', v);
     label(btn, v ? 'Close drawer' : 'Drawer');
-    $('bBackup').hidden = $('bRestore').hidden = !v;
+    $('bBackup').hidden = !v;
     if (!v) ta.focus({ preventScroll: true });
     drawerLight.set(v);
     if (!reduce) snd.drawer(v, v ? .74 : .42);      // when it reaches its stop: as timed in the stylesheet
@@ -3265,28 +3299,46 @@ const drawer = (() => {
     download('typelight-backup-' + stamp() + '.json', JSON.stringify({ typelight: 1, saved: new Date().toISOString(), machine, drawer: sheets }, null, 1), 'application/json');
     say(n ? `Backed up ${n === 1 ? 'one text' : n + ' texts'} to a file.` : 'There is nothing to back up yet.', 4000);
   }
-  // The texts of a backup go on top of the pile, in their order there. Nothing here is
-  // replaced or thrown away; a text that is here already (in the machine or the drawer)
-  // is not brought in twice.
-  function restore(data) {
-    if (!data || data.typelight !== 1 || !Array.isArray(data.drawer)) {
-      say('That file is not a Typelight backup.', 6000);
+  // Texts from files: a backup's, or plain text files. One plain text file on its own goes
+  // into the machine, as if taken from the drawer (the text there is put away); anything
+  // else goes on top of the pile, in its order, with the drawer pulled out to show it.
+  // Nothing here is replaced, and a text that is here already is not brought in twice.
+  // (not: names of files that were neither)
+  function bring(items, { machine = false, not = [] } = {}) {
+    const all = items.filter(x => x && typeof x.text === 'string' && x.text.trim());
+    const notes = not.length ? ' ' + (not.length === 1 ? `(${not[0]} is not a text file or a Typelight backup.)` : `(${not.length} of the files are not text files or Typelight backups.)`) : '';
+    const ids = new Set(sheets.map(x => x.id));
+    const make = x => {
+      const id = typeof x.id === 'string' && x.id && !ids.has(x.id) ? x.id : uid();
+      ids.add(id);
+      const title = typeof x.title === 'string' ? x.title.trim().slice(0, 120) : '';
+      return { id, text: x.text, at: Number.isFinite(x.at) ? x.at : Date.now(), ...(title && { title }) };
+    };
+    if (!all.length) {
+      tell(not.length ? (not.length === 1 ? `${not[0]} is not a text file or a Typelight backup.` : 'None of those files is a text file or a Typelight backup.') : 'There is no text in that.', 6000);
       return;
     }
-    const all = [data.machine, ...data.drawer].filter(x => x && typeof x.text === 'string' && x.text.trim());
-    const here = new Set([S.text, ...sheets.map(x => x.text)]), ids = new Set(sheets.map(x => x.id));
+    if (machine && all.length === 1) {
+      const x = all[0];
+      if (x.text === S.text) { tell('That text is in the machine already.'); return; }
+      let sh = sheets.find(y => y.text === x.text);
+      if (!sh) { sh = make(x); sheets.unshift(sh); }
+      const putAway = S.text.trim() !== '';
+      swap(sh.id);
+      tell('Opened' + (sh.title ? ' ' + sh.title : '') + (putAway ? '; the text that was in the machine is in the drawer' : '') + '.' + notes, 5000);
+      return;
+    }
+    const here = new Set([S.text, ...sheets.map(x => x.text)]);
     const add = [];
     for (const x of all) {
       if (here.has(x.text)) continue;
       here.add(x.text);
-      const id = typeof x.id === 'string' && x.id && !ids.has(x.id) ? x.id : uid();
-      ids.add(id);
-      const title = typeof x.title === 'string' ? x.title.trim() : '';
-      add.push({ id, text: x.text, at: Number.isFinite(x.at) ? x.at : Date.now(), ...(title && { title }) });
+      add.push(make(x));
     }
     const had = all.length - add.length;
+    if (!open) set(true);
     if (!add.length) {
-      say(all.length ? 'Every text in that backup is here already.' : 'That backup is empty.', 6000);
+      say((all.length === 1 ? 'That text is' : 'Every one of those texts is') + ' here already.' + notes, 6000);
       return;
     }
     letGo();
@@ -3295,8 +3347,12 @@ const drawer = (() => {
     render();
     well.scrollTop = 0;
     snd.tick();
-    say((add.length === 1 ? 'One text' : add.length + ' texts') + ' from the backup, on top of the pile.' +
-      (had ? ` (${had === 1 ? 'One was' : had + ' were'} here already.)` : ''), 7000);
+    say((add.length === 1 ? 'One text' : add.length + ' texts') + ' brought in, on top of the pile.' +
+      (had ? ` (${had === 1 ? 'One was' : had + ' were'} here already.)` : '') + notes, 7000);
+  }
+  // said in the drawer while it is out, beside the word count while it is not
+  function tell(msg, ms = 5000) {
+    if (open) say(msg, ms); else flash(msg, ms);
   }
   // Read again from storage: another tab has changed it.
   function reload() {
@@ -3311,7 +3367,7 @@ const drawer = (() => {
   return {
     get open() { return open; },
     get naming() { return !!naming; },
-    set, swap, arrange, letGo, backup, restore, reload,
+    set, swap, arrange, letGo, backup, bring, reload,
     has: node => el.contains(node) || binEl.contains(node),
     roll: lines => well.scrollBy({ top: lines * pitch(), behavior: reduce ? 'auto' : 'smooth' }),
   };
@@ -3715,7 +3771,8 @@ function label(b, text) {
 }
 function keyed(b, title) {
   const k = MENU_MOD + '+' + b.dataset.key.toUpperCase();
-  return title.replace(/\.$/, '') + ' (' + (b.id === 'bSave' ? (MAC ? '⌘S or ' : 'Ctrl+S or ') : '') + k + ')';
+  const also = { bSave: 'S', bOpen: 'O' }[b.id];
+  return title.replace(/\.$/, '') + ' (' + (also ? (MAC ? '⌘' : 'Ctrl+') + also + ' or ' : '') + k + ')';
 }
 // The item a key press asks for, if it is one of these.
 function menuKey(e) {
@@ -3738,7 +3795,12 @@ function soundTitle() {
 
 function saveFile() {
   persist();
-  download('typelight-' + stamp() + '.txt', S.text, 'text/plain;charset=utf-8');
+  download(fileName('.txt'), S.text, 'text/plain;charset=utf-8');
+}
+// The file a text is saved to is named after the text, if it has been given a name.
+function fileName(ext) {
+  const name = S.title.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').replace(/^[ .]+|[ .]+$/g, '').slice(0, 100);
+  return (name || 'typelight-' + stamp()) + ext;
 }
 function stamp() {
   const d = new Date(), pad = n => String(n).padStart(2, '0');
@@ -3751,21 +3813,6 @@ function download(name, content, type) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-// A backup file, chosen by the person, read and handed to the drawer.
-function openBackup() {
-  const pick = document.createElement('input');
-  pick.type = 'file';
-  pick.accept = '.json,application/json';
-  pick.addEventListener('change', async () => {
-    const f = pick.files && pick.files[0];
-    if (!f) return;
-    let data = null;
-    try { data = JSON.parse(await f.text()); } catch { /* not a backup: the drawer says so */ }
-    drawer.restore(data);
-  });
-  pick.click();
-}
-
 for (const b of hud.querySelectorAll('button')) {
   b.addEventListener('pointerdown', e => e.preventDefault());   // typing focus stays on the paper
   if (b.textContent) label(b, b.textContent);
@@ -3778,9 +3825,106 @@ $('bSound').addEventListener('click', () => {
   if (S.sound) snd.key(0);
 });
 $('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = keyed(e.currentTarget, soundTitle()); });
+// Opening files: text files, or backups. Chosen with "Open file" (or Cmd/Ctrl+O), or dropped
+// anywhere on the page. A text file is read as UTF-8 and its lines are ended the one way;
+// its name, less the ending, becomes the name of the text.
+function pickFiles() {
+  const pick = document.createElement('input');
+  pick.type = 'file';
+  pick.multiple = true;
+  pick.accept = '.txt,.text,.md,.json,text/plain,application/json';
+  pick.addEventListener('change', () => { if (pick.files && pick.files.length) openFiles([...pick.files]); });
+  pick.click();
+}
+// Text from the bytes of a file: UTF-8 as a rule, and failing that windows-1250, which older
+// Czech texts are often in. Null for what is not text at all.
+function textOf(buf) {
+  const u = new Uint8Array(buf);
+  let odd = 0;                              // control characters other than tab, new line, form feed and return
+  for (const x of u) {
+    if (x === 0) return null;
+    if (x < 32 && x !== 9 && x !== 10 && x !== 12 && x !== 13) odd++;
+  }
+  if (odd > u.length / 200) return null;
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(u); } catch { /* not UTF-8 */ }
+  return new TextDecoder('windows-1250').decode(u);
+}
+async function openFiles(files) {
+  const items = [], not = [];
+  let backup = false;
+  for (const f of files) {
+    let t = null;
+    if (f.size <= 8e6) try { t = textOf(await f.arrayBuffer()); } catch { /* unreadable */ }
+    if (t === null) { not.push(f.name); continue; }
+    if (/\.json$/i.test(f.name) || f.type === 'application/json') {
+      let d = null;
+      try { d = JSON.parse(t); } catch { /* not a backup */ }
+      if (d && d.typelight === 1 && Array.isArray(d.drawer)) { backup = true; items.push(d.machine, ...d.drawer); }
+      else not.push(f.name);
+      continue;
+    }
+    const base = f.name.replace(/\.[^.]*$/, '').trim();
+    items.push({
+      text: t.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\t/g, '    '),
+      at: f.lastModified || Date.now(),
+      title: /^typelight-\d{4}-\d\d-\d\d/.test(base) ? '' : base,      // (a name the app gave it is no name)
+    });
+  }
+  drawer.bring(items, { machine: !backup && files.length === 1, not });
+  ta.focus({ preventScroll: true });
+}
+window.addEventListener('dragover', e => {
+  if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
+});
+window.addEventListener('drop', e => {
+  if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+  e.preventDefault();                       // (the browser would leave the page for the file)
+  openFiles([...e.dataTransfer.files]);
+});
+
+// Printing (Cmd/Ctrl+P, or the browser's menu): the sheets are made up just before, from
+// the text in the machine wrapped at the full line, and taken away again after.
+function printSheets() {
+  const per = Math.floor(A4_COLS * .6 * A4_TALL / 1.72) - TOP_ROWS - BOTTOM_ROWS;     // (as measure works it out, for Courier's .6em)
+  const t = S.text, rows = [];
+  for (let i = 0; ;) {
+    let e = t.indexOf('\n', i);
+    if (e === -1) e = t.length;
+    wrapPara(t, i, e, MAX_COLS, (s, f) => rows.push(t.slice(s, f)));
+    if (e >= t.length) break;
+    i = e + 1;
+  }
+  const out = document.createElement('div');
+  out.className = 'print';
+  out.id = 'print';
+  for (let k = 0; k === 0 || k * per < rows.length; k++) {
+    const pg = document.createElement('div');
+    pg.className = 'pg';
+    pg.textContent = rows.slice(k * per, (k + 1) * per).join('\n');
+    if (k) {
+      const n = document.createElement('span');
+      n.className = 'pn';
+      n.textContent = k + 1;
+      pg.prepend(n);
+    }
+    out.appendChild(pg);
+  }
+  document.body.appendChild(out);
+}
+window.addEventListener('beforeprint', () => { const o = $('print'); if (o) o.remove(); printSheets(); });
+window.addEventListener('afterprint', () => { const o = $('print'); if (o) o.remove(); });
+
+// A word said for a moment where the word count is.
+function flash(msg, ms = 2600) {
+  countEl.textContent = msg;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, ms);
+  wake();
+}
+
 $('bSave').addEventListener('click', saveFile);
 $('bBackup').addEventListener('click', () => drawer.backup());
-$('bRestore').addEventListener('click', openBackup);
+$('bOpen').addEventListener('click', pickFiles);
 $('bNew').addEventListener('click', () => {
   const kept = S.text.trim() !== '';
   drawer.swap(null);                        // nothing is thrown away: the sheet goes into the drawer

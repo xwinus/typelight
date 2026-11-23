@@ -70,12 +70,20 @@ to the system Courier.
   device only. If the browser will not keep it (its storage is full, or
   switched off for the site), "Not saved in this browser" says so beside the
   word count. "Save .txt" (or Cmd/Ctrl+S) downloads the text in the machine
-  as a plain text file, all its pages in one.
+  as a plain text file, all its pages in one, named after the text if it has
+  been given a name.
+- "Open file" (or Cmd/Ctrl+O, or dropping files on the page) opens text files.
+  One file goes into the machine, and the text that was there is put away in
+  the drawer; several go into the drawer, on top of the pile. A text takes its
+  name from the file. Files are read as UTF-8, or else as windows-1250.
 - With the drawer out, "Back up" downloads every text, the one in the machine
-  and those in the drawer, as one JSON file, and "Restore" brings the texts
-  of such a file back into the drawer, on top of the pile. Restoring replaces
-  nothing: a text that is already there is not brought in twice. The balls of
-  paper on the floor are not backed up.
+  and those in the drawer, as one JSON file. Opening such a file brings its
+  texts back into the drawer. Nothing is replaced: a text that is already
+  there is not brought in twice. The balls of paper on the floor are not
+  backed up.
+- Printing (Cmd/Ctrl+P) prints the text in the machine on A4, as it lies in
+  the machine: Courier at ten characters to the inch, 62 to a line, the pages
+  from the second on numbered. "Save as PDF" in the print dialog makes a PDF.
 - The app can be open in several tabs. When one tab saves, the others stop
   saving, so as not to write over it, and take up what it saved as soon as
   they are used again.
@@ -85,8 +93,8 @@ to the system Courier.
 - Each item of the menu has a letter underlined. Alt and that letter works
   the item from the keyboard (on a Mac it is Control, because Option and a
   letter types characters there): P for the pages, D for the drawer, L for
-  the lamp, O for the sound, S to save, N for a new text, and with the drawer
-  out B to back up and R to restore.
+  the lamp, O for the sound, F to open a file, S to save, N for a new text,
+  and with the drawer out B to back up.
 - Opening the app with `#demo` at the end of the address fills the drawer
   with sample texts to try it on; nothing is read or saved in that mode.
 

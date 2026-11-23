@@ -5,13 +5,8 @@ writing something they care about.
 
 ## Getting text in and out
 
-- [ ] Open a .txt file. Today a text can only be pasted in.
 - [ ] Copy a part of the text. Nothing can be selected, so "Save .txt" is the
       only way out.
-- [ ] Print, or save as PDF. The pages are A4 already; there is no print
-      style.
-- [ ] Use the name of the text in the name of the saved file (now
-      `typelight-date.txt`).
 
 ## Agreed, not built
 
@@ -37,13 +32,11 @@ writing something they care about.
       come to the page's own undo through `beforeinput`; untested.
 - [ ] A real phone and a touch screen: rolling the paper, the drawer, the
       pages.
-- [ ] Firefox and Safari.
+- [ ] Firefox and Safari. Printing in particular: the sheets are A4 with no
+      margin of the browser's own (`@page`), which Safari has been known to
+      ignore.
 - [ ] Windows: Alt and a letter for the menu may be taken by the browser's
       own menu before the page sees it (Alt+S in Firefox, for one).
 - [ ] All motion and sound by eye and ear: the page turn, rolling by lines,
       the pages overview and its lamp coming on, the crumpling.
 - [ ] The pages overview without WebGL (the plain gradient).
-
-## To decide
-
-- [ ] Keep or remove the `#demo` mode. It was added as a testing aid.
