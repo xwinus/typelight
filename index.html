@@ -283,6 +283,9 @@
     transition: color .2s ease;
   }
   .hud button:hover { color: rgba(255,232,196,.95); }
+  /* the letter that works the item from the keyboard (see "The menu by keyboard") */
+  .hud button u { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .22em; }
+  @media (hover: none) and (pointer: coarse) { .hud button u { text-decoration: none; } }      /* no keyboard to speak of */
   .hud button:focus-visible { outline: 1px solid rgba(255,214,160,.7); outline-offset: -1px; }
 
   /* ---------- all the pages ---------- */
@@ -620,12 +623,12 @@
     </div>
     <span class="hint" id="hint" aria-live="polite"></span>
     <nav>
-      <button type="button" id="bPages" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
-      <button type="button" id="bDrawer" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
-      <button type="button" id="bLamp" title="Lamp brightness"></button>
-      <button type="button" id="bSound" title="Typewriter sounds"></button>
-      <button type="button" id="bSave" title="Download the text as a file (⌘S / Ctrl+S)">Save .txt</button>
-      <button type="button" id="bNew" title="Put this text away in the drawer and start another on a blank sheet">New text</button>
+      <button type="button" id="bPages" data-key="p" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
+      <button type="button" id="bDrawer" data-key="d" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
+      <button type="button" id="bLamp" data-key="l" title="Lamp brightness"></button>
+      <button type="button" id="bSound" data-key="o" title="Typewriter sounds"></button>
+      <button type="button" id="bSave" data-key="s" title="Download the text as a file">Save .txt</button>
+      <button type="button" id="bNew" data-key="n" title="Put this text away in the drawer and start another on a blank sheet">New text</button>
     </nav>
   </footer>
 
@@ -1789,6 +1792,12 @@ ta.addEventListener('keydown', e => {
 // keep the machine under the fingers
 document.addEventListener('keydown', e => {
   if (drawer.naming) return;                // a name is being written on a slip: the keys are its own
+  const item = menuKey(e);
+  if (item) {                               // the menu (and nothing reaches the paper)
+    e.preventDefault(); e.stopPropagation();
+    if (!e.repeat && !item.hidden) { wake(); item.click(); }
+    return;
+  }
   if (spread.open) {
     if (e.key === 'Escape') { spread.set(false); return; }
     if (spread.has(document.activeElement) && /^(Tab|Enter| |Shift|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) return;
@@ -2882,7 +2891,7 @@ const drawer = (() => {
     root.classList.toggle('drawer-open', v);
     el.inert = binEl.inert = !v;
     btn.setAttribute('aria-expanded', v);
-    btn.textContent = v ? 'Close drawer' : 'Drawer';
+    label(btn, v ? 'Close drawer' : 'Drawer');
     if (!v) ta.focus({ preventScroll: true });
     drawerLight.set(v);
     if (!reduce) snd.drawer(v, v ? .74 : .42);      // when it reaches its stop: as timed in the stylesheet
@@ -3431,7 +3440,7 @@ void main() {
     root.classList.toggle('pages-open', v);
     el.inert = !v;
     btn.setAttribute('aria-expanded', v);
-    btn.textContent = v ? 'Close pages' : 'Pages';
+    label(btn, v ? 'Close pages' : 'Pages');
     if (v) {
       persist();
       const cur = build();
@@ -3520,10 +3529,33 @@ function paintPrefs() {
   light.wake();
   drawerLight.wake();
   spread.wake();
-  $('bLamp').textContent = 'Lamp: ' + LAMP_NAMES[S.lamp];
+  label($('bLamp'), 'Lamp: ' + LAMP_NAMES[S.lamp]);
   const bs = $('bSound');
-  bs.textContent = 'Sound: ' + (snd.failed ? 'unavailable' : S.sound ? 'on' : 'off');
-  bs.title = soundTitle();
+  label(bs, 'Sound: ' + (snd.failed ? 'unavailable' : S.sound ? 'on' : 'off'));
+  bs.title = keyed(bs, soundTitle());
+}
+
+// The menu by keyboard: Alt and a letter of the word, which is underlined. On a Mac it
+// is Control, because Option and a letter is how characters are typed there.
+const MAC = /Mac|iPhone|iPad/.test(navigator.platform || ''), MENU_MOD = MAC ? 'Ctrl' : 'Alt';
+function label(b, text) {
+  const k = b.dataset.key, i = k ? text.toLowerCase().indexOf(k) : -1;
+  if (i < 0) { b.textContent = text; return; }
+  const u = document.createElement('u');
+  u.textContent = text[i];
+  b.replaceChildren(text.slice(0, i), u, text.slice(i + 1));
+}
+function keyed(b, title) {
+  const k = MENU_MOD + '+' + b.dataset.key.toUpperCase();
+  return title.replace(/\.$/, '') + ' (' + (b.id === 'bSave' ? (MAC ? '⌘S or ' : 'Ctrl+S or ') : '') + k + ')';
+}
+// The item a key press asks for, if it is one of these.
+function menuKey(e) {
+  if ((MAC ? !e.ctrlKey || e.altKey : !e.altKey || e.ctrlKey) || e.metaKey || e.shiftKey) return null;
+  if (e.getModifierState && e.getModifierState('AltGraph')) return null;      // AltGr types characters
+  // (the letter the key types; on a keyboard without Latin letters, the key where it usually is)
+  const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : '';
+  return k ? hud.querySelector(`button[data-key="${k}"]`) : null;
 }
 
 function soundTitle() {
@@ -3549,13 +3581,16 @@ function saveFile() {
 
 for (const b of hud.querySelectorAll('button')) {
   b.addEventListener('pointerdown', e => e.preventDefault());   // typing focus stays on the paper
+  if (b.textContent) label(b, b.textContent);
+  b.title = keyed(b, b.title);
+  b.setAttribute('aria-keyshortcuts', (MAC ? 'Control+' : 'Alt+') + b.dataset.key.toUpperCase());
 }
 $('bLamp').addEventListener('click', () => { S.lamp = (S.lamp + 1) % LAMPS.length; paintPrefs(); savePrefs(); });
 $('bSound').addEventListener('click', () => {
   S.sound = !S.sound; paintPrefs(); savePrefs();
   if (S.sound) snd.key(0);
 });
-$('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = soundTitle(); });
+$('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = keyed(e.currentTarget, soundTitle()); });
 $('bSave').addEventListener('click', saveFile);
 $('bNew').addEventListener('click', () => {
   const kept = S.text.trim() !== '';

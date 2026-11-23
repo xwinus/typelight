@@ -69,6 +69,10 @@ to the system Courier.
 - Everything is saved in the browser's local storage as you type, on this
   device only. "Save .txt" (or Cmd/Ctrl+S) downloads the text in the machine
   as a plain text file, all its pages in one.
+- Each item of the menu has a letter underlined. Alt and that letter works
+  the item from the keyboard (on a Mac it is Control, because Option and a
+  letter types characters there): P for the pages, D for the drawer, L for
+  the lamp, O for the sound, S to save, N for a new text.
 - Opening the app with `#demo` at the end of the address fills the drawer
   with sample texts to try it on; nothing is read or saved in that mode.
 
