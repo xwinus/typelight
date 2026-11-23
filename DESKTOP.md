@@ -170,7 +170,25 @@ including button bounds and overlapping controls. All
 a running AudioContext. Physical speaker output and audible quality still
 need a listening pass.
 
-The latest unit suite passes 76 tests. The packaged Mac application's ASAR is
+The latest unit suite passes 99 tests. Selection checks cover mouse dragging,
+double-click, keyboard and native-menu selection, plain-text copy/cut, replacement,
+multi-page ranges, and restoring backward selections through undo. Unit tests
+also verify grapheme boundaries and preservation of text after clipboard errors.
+Composition replacement is tested with simulated input; real keyboard IME checks
+on each target platform remain necessary.
+Accessibility runtime checks cover Tab and reverse Tab without editing, Enter
+and Space activation, F6 navigation, drawer and page focus, modal help and focus
+restoration, and hoverable tooltips dismissible with Escape. Reading mode uses
+even paper lighting and crisp ink; computed normal and selected text contrast
+exceeds 4.5:1. At 200% zoom, every toolbar button remains within the smallest
+desktop window, and help remains scrollable. Reading and size preferences survive
+reopening without changing the document. Routine autosaves are silent to screen
+readers; save failures and completed recovery have separate announcements.
+Drawer names are concise, with metadata exposed separately. These automated
+checks do not replace hands-on VoiceOver and NVDA testing before release.
+The installed help dialog and even reading light were also inspected visually
+on macOS, then the original appearance was restored without editing the text.
+The packaged Mac application's ASAR is
 also supported by the smoke runner through `TYPELIGHT_TEST_APP=/path/to/app.asar`.
 The installed palette was also inspected visually in the editor and drawer;
 both retain the same visible tools and regular spacing. Keyboard order matches

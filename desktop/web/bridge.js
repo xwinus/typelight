@@ -30,7 +30,7 @@
         pages: document.documentElement.classList.contains('pages-open') ||
           el('room').classList.contains('pages-open'),
         hasPages: !el('bPages').hidden && !el('bPages').disabled,
-        sound: prefs.sound !== false, lamp: prefs.lamp ?? 2,
+        sound: prefs.sound !== false, lamp: prefs.lamp ?? 2, reading: prefs.reading === true,
         quiet: el('hud').classList.contains('quiet'),
         saving: dirty || revision !== written, error,
       };
@@ -131,6 +131,7 @@
     importFiles: files => trackImport(() => editor?.importFiles(files)),
     recover: backup => editor?.recover(backup),
     download,
+    zoom: factor => request({ type: 'zoom', factor }),
     command: action => editor?.command(action),
     preparePrint: () => editor?.preparePrint(),
     finishPrint: () => editor?.finishPrint(),

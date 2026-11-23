@@ -54,7 +54,25 @@ offer it can install it as an app.
   head and the carriage goes to the place. What you type goes in there and the
   rest moves along. Left and right move the carriage, up and down the paper,
   Home and End go to the ends of the line, and Escape takes the head back to
-  the end of the text. Nothing can be selected.
+  the end of the text.
+- Drag on the paper or hold Shift with the arrow keys to select text. Double-click
+  selects a word; Shift-click extends the selection. Cmd/Ctrl+A selects the whole
+  document, including pages outside the viewport. Cmd/Ctrl+C copies the selection,
+  Cmd/Ctrl+X cuts it, and typing, pasting, indenting, or Delete replaces it. Undo restores
+  both the text and its previous selection. Escape first clears the selection.
+  Option+Arrow on macOS and Ctrl+Arrow elsewhere move by words; adding Shift
+  selects them. Shift+Home/End selects to a line boundary and Shift+PageUp/Down
+  extends by a screen of text. Touch dragging continues to roll the paper.
+- Tab and Shift+Tab move between controls without changing the document.
+  Cmd/Ctrl+] inserts four spaces. F6 switches between the tools and the current
+  writing, drawer, or page view. Enter and Space activate buttons.
+- The question mark in the upper-right corner (or F1) opens reading options and
+  keyboard help; in the desktop app it sits in the title bar, opposite the
+  window's own buttons. Even reading light removes shading and distressed ink
+  for clearer text and selection. "Reading" in the menu (Alt/Control+R, and
+  Cmd/Ctrl+Shift+R in the desktop app) switches it too. Size controls offer 75–200% scaling: the whole
+  interface on desktop, text on the web. Cmd/Ctrl+Plus, Minus, and 0 adjust or
+  reset it. Reading preferences are remembered outside demo mode.
 - Lines wrap on their own; the head returns and the paper feeds up one line.
 - The mouse wheel or a touch drag rolls the paper so you can reread, a line
   at a time like the ratchet of a platen: the paper never rests between two
@@ -94,7 +112,7 @@ offer it can install it as an app.
 - Everything is saved in the browser's local storage as you type, on this
   device only. If the browser will not keep it (its storage is full, or
   switched off for the site), "Not saved in this browser" says so beside the
-  word count. "Save .txt" (or Cmd/Ctrl+S) downloads the text in the machine
+  word count. "Export text…" (or Cmd/Ctrl+S) downloads the text in the machine
   as a plain text file, all its pages in one, named after the text if it has
   been given a name.
 - "Open file" (or Cmd/Ctrl+O, or dropping files on the page) opens text files.
@@ -130,7 +148,7 @@ offer it can install it as an app.
 - Each item of the menu has a letter underlined. Alt and that letter works
   the item from the keyboard (on a Mac it is Control, because Option and a
   letter types characters there): P for the pages, D for the drawer, L for
-  the lamp, O for the sound, I to find, F to open a file, S to save, N for a
+  the lamp, R for the even reading light, O for the sound, I to find, F to open a file, S to save, N for a
   new text, and with the drawer out B to back up. With the drawer out, "Back
   up" takes the place of "Save .txt", and the blank sheet on top of the pile
   that of "New text".

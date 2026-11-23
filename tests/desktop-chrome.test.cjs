@@ -15,6 +15,7 @@ function chrome() {
     body: { append() {} }, documentElement: { dataset: {} },
     createElement() {
       const element = { dataset: {}, append(...children) { this.children = children; },
+        getAttribute(key) { return this[key] ?? null; },
         setAttribute(key, value) { this[key] = value; } };
       elements.push(element);
       return element;
@@ -24,7 +25,9 @@ function chrome() {
         { querySelector: selector => selector === 'nav' ? nav : brand } : { id });
     },
   };
-  const window = { typelightHost: { platform: 'darwin' }, addEventListener(name, callback) { listeners[name] = callback; } };
+  const window = { typelightHost: { platform: 'darwin' },
+    TypelightAccessibility: require('../editor/accessibility.js'),
+    addEventListener(name, callback) { listeners[name] = callback; } };
   vm.runInNewContext(fs.readFileSync('desktop/web/chrome.js', 'utf8'), { window, document });
   return { document, status: brand.status, report: detail => listeners['typelight:state']({ detail }) };
 }
@@ -32,7 +35,8 @@ function chrome() {
 test('saved state keeps an accessible description beside the word count', () => {
   const ui = chrome();
   ui.report({ title: 'My text', saving: false, error: '', librarySummary: '999 texts · 999,999 words' });
-  assert.equal(ui.status.role, 'status');
+  assert.equal(ui.status.role, 'img');
+  assert.equal(ui.status['aria-live'], 'off');
   assert.equal(ui.document.getElementById('desk').stamp.className, 'desk-mark');
   assert.equal(ui.document.getElementById('desk').stamp['aria-hidden'], 'true');
   assert.equal(ui.status.textContent, 'Saved on this device');
@@ -43,7 +47,7 @@ test('saved state keeps an accessible description beside the word count', () => 
   assert.equal(ui.document.getElementById('drawer').actions.children[1], ui.document.getElementById('bBackup'));
   assert.equal(ui.document.getElementById('bBackup')['aria-label'], 'Back up library');
   assert.deepEqual(ui.document.getElementById('hud').querySelector('nav').children.map(b => b.id),
-    ['bDrawer', 'bPages', 'bNew', 'bOpen', 'bSave', 'bFind', 'bLamp', 'bSound']);
+    ['bDrawer', 'bPages', 'bNew', 'bOpen', 'bSave', 'bFind', 'bLamp', 'bRead', 'bSound']);
 });
 
 test('an unnamed text can show pending save status without a permanent second line', () => {

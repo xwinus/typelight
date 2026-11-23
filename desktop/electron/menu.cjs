@@ -23,9 +23,14 @@ function installMenu(command) {
       item('Return to Writing', 'focus', 'CmdOrCtrl+1'), separator,
       item('Adjust Lamplight', 'bLamp', 'CmdOrCtrl+Shift+L'),
       item('Toggle Typewriter Sound', 'bSound', 'CmdOrCtrl+Shift+M'), separator,
+      { id: 'readingMode', type: 'checkbox', label: 'Even Reading Light',
+        accelerator: 'CmdOrCtrl+Shift+R', click: () => command('readingMode') },
+      item('Zoom In', 'zoomIn', 'CmdOrCtrl+Plus'), item('Zoom Out', 'zoomOut', 'CmdOrCtrl+-'),
+      item('Actual Size', 'zoomReset', 'CmdOrCtrl+0'), separator,
       { role: 'togglefullscreen' },
     ] },
     { role: 'windowMenu' },
+    { role: 'help', submenu: [item('Reading & Keyboard Help', 'help', 'F1')] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

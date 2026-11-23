@@ -5,9 +5,13 @@
 // new version in its address), so it comes from here first.
 //
 // Change CACHE when the list below changes: the old cache is then thrown away.
-const CACHE = 'typelight-1';
+const CACHE = 'typelight-3';
 const SHELL = [
   './',
+  'editor/selection.js',
+  'editor/accessibility.js',
+  'editor/accessibility.css',
+  'editor/tooltips.js',
   'manifest.webmanifest',
   'logo.svg',
   'apple-touch-icon.png',

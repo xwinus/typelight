@@ -9,8 +9,8 @@ The items below retain the detailed prototype notes.
 
 ## Getting text in and out
 
-- [ ] Copy a part of the text. Nothing can be selected, so "Save .txt" is the
-      only way out.
+- [x] Select, copy, cut, and replace part of the text with mouse and keyboard;
+      preserve the selection when undoing an edit.
 
 ## Put off
 
@@ -20,6 +20,9 @@ The items below retain the detailed prototype notes.
 
 ## To check
 
+- [ ] Hands-on VoiceOver and NVDA checks for editing, drawer navigation, help,
+      file dialogs, and save errors. Automated Mac checks cover focus, keyboard
+      activation, reading contrast, tooltips, and layout at 200% zoom.
 - [ ] Electron desktop on macOS, Windows, and Linux: clean installation, audio,
       input, print, offline restart, recovery, and upgrades preserving documents.
 - [ ] Sign and notarize the macOS release; sign the Windows installer.

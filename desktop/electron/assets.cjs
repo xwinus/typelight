@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const FILES = new Set(['index.html', 'logo.svg', 'logo-mark.svg', 'apple-touch-icon.png',
   'manifest.webmanifest', 'LICENSE']);
-const DIRECTORIES = ['sounds/', 'fonts/', 'textures/', 'icons/', 'desktop/web/'];
+const DIRECTORIES = ['sounds/', 'fonts/', 'textures/', 'icons/', 'desktop/web/', 'editor/'];
 const MIME = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8',
   css: 'text/css; charset=utf-8', json: 'application/json', webmanifest: 'application/manifest+json',
   svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', woff2: 'font/woff2',

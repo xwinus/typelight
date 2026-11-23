@@ -7,7 +7,7 @@ async function checkToolbarStability(window, command) {
       const r = element.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     };
-    return Object.fromEntries(['hud', 'bDrawer', 'bPages', 'bNew', 'bOpen', 'bSave', 'bFind', 'bLamp', 'bSound']
+    return Object.fromEntries(['hud', 'bDrawer', 'bPages', 'bNew', 'bOpen', 'bSave', 'bFind', 'bLamp', 'bRead', 'bSound']
       .map(id => [id, box(document.getElementById(id))]));
   })()`);
   const baseline = await bounds();
@@ -20,7 +20,7 @@ async function checkToolbarStability(window, command) {
   })()`);
   const editorCount = await evaluate('document.getElementById("count").textContent');
   assert.equal(editorCount, counts.words + (counts.words === 1 ? ' word' : ' words'));
-  const tools = ['bDrawer', 'bPages', 'bNew', 'bOpen', 'bSave', 'bFind', 'bLamp', 'bSound'];
+  const tools = ['bDrawer', 'bPages', 'bNew', 'bOpen', 'bSave', 'bFind', 'bLamp', 'bRead', 'bSound'];
   const visibleTools = () => evaluate(`Array.from(document.querySelectorAll('#hud nav button'))
     .filter(b => !b.hidden).sort((a,b) => a.getBoundingClientRect().x - b.getBoundingClientRect().x).map(b => b.id)`);
   assert.deepEqual(await visibleTools(), tools, 'Every primary action has a visible icon, with no reserved holes');

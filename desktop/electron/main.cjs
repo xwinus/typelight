@@ -1,7 +1,7 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
-const { app, BrowserWindow, protocol, ipcMain, dialog, clipboard, session } = require('electron');
+const { app, BrowserWindow, protocol, ipcMain, dialog, clipboard, session, Menu } = require('electron');
 const { LibraryStore } = require('./library-store.cjs');
 const { assetResponse } = require('./assets.cjs');
 const { trustedFrame, validateMessage } = require('./policy.cjs');
@@ -22,6 +22,9 @@ function checkLegacyApp() {
     throw new Error('Quit the earlier Typelight app before opening this version. Your texts have not been changed.');
   }
 }
+
+// Where the window's own buttons sit. desktop/web/electron.css mirrors them for the help button.
+const TRAFFIC_LIGHTS = { x: 18, y: 16 };
 
 async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = true } = {}) {
   const directory = path.resolve(dataDirectory || path.join(app.getPath('appData'), 'Typelight'));
@@ -49,10 +52,15 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
     validateMessage(message);
     switch (message.type) {
       case 'ready': ready = true; return true;
-      case 'state': return true;
+      case 'state': {
+        const reading = Menu.getApplicationMenu()?.getMenuItemById('readingMode');
+        if (reading) reading.checked = message.state?.reading === true;
+        return true;
+      }
       case 'save': library.replace(message.values); return true;
       case 'open': return files.openFiles(window);
       case 'export': return files.exportFile(window, message);
+      case 'zoom': window.webContents.setZoomFactor(message.factor); return window.webContents.getZoomFactor();
     }
   });
 
@@ -71,7 +79,7 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
     ready = false; closing = false; mayClose = false;
     window = new BrowserWindow({ title: 'Typelight', width: 1180, height: 820, minWidth: 900, minHeight: 580,
       show: false, backgroundColor: '#14110f', titleBarStyle: 'hidden',
-      ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 16 } } : {
+      ...(process.platform === 'darwin' ? { trafficLightPosition: TRAFFIC_LIGHTS } : {
         titleBarOverlay: { color: '#14110f', symbolColor: '#e8d9c3', height: 36 }, autoHideMenuBar: true,
       }),
       icon: path.join(root, 'icons/icon-512.png'),
@@ -79,7 +87,15 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
         sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false,
         autoplayPolicy: 'no-user-gesture-required' },
     });
+    // macOS can put the window buttons back in their default place (after tiling or a change
+    // of size, for one); the help button in the page is placed opposite where they are set.
+    if (process.platform === 'darwin') {
+      const own = window;
+      const keep = () => { if (!own.isDestroyed() && !own.isFullScreen()) own.setWindowButtonPosition(TRAFFIC_LIGHTS); };
+      for (const event of ['resize', 'leave-full-screen', 'focus', 'show']) own.on(event, keep);
+    }
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    window.webContents.on('zoom-changed', (_event, direction) => command(direction === 'in' ? 'zoomIn' : 'zoomOut'));
     window.webContents.on('will-navigate', event => event.preventDefault());
     window.webContents.on('will-attach-webview', event => event.preventDefault());
     window.webContents.on('render-process-gone', () => {

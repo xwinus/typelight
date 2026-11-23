@@ -162,6 +162,11 @@
     color: var(--ink);
     text-shadow: 0 0 .5px rgba(28,23,19,.55);   /* a little ink spread */
   }
+  .ln.selected::after {
+    content: ''; position: absolute; pointer-events: none;
+    left: var(--selection-left); width: var(--selection-width); top: 2px; bottom: 2px;
+    background: rgba(63, 130, 166, .32); border-radius: 2px;
+  }
   .c { display: inline-block; width: var(--chw); text-align: center; }
   .c.hv { text-shadow: 0 0 .8px rgba(28,23,19,.85); }  /* a harder strike */
   .c.fr { animation: strike 110ms ease-out; }
@@ -671,10 +676,15 @@
     }
   }
 </style>
+<link rel="stylesheet" href="editor/accessibility.css">
+<script src="editor/selection.js"></script>
+<script src="editor/accessibility.js"></script>
+<script src="editor/tooltips.js"></script>
 </head>
 <body>
-<div class="room" id="room">
-  <div class="drawer" id="drawer" inert>
+<div class="room" id="room" role="main" aria-label="Typelight">
+  <div class="drawer" id="drawer" role="region" aria-label="Your texts" aria-describedby="drawerInstructions" inert>
+    <span class="sr-only" id="drawerInstructions">Use Up and Down to browse, Enter to open, F2 to rename, and Delete to move a text to the floor. Escape returns to writing.</span>
     <div class="well" id="well"><div class="pile" id="pile"></div></div>
     <canvas class="drawer-gl" id="dgl" aria-hidden="true"></canvas>
     <div class="drawer-glow"></div>
@@ -683,7 +693,7 @@
   <!-- the floor beside the drawer: what was thrown away lies here, crumpled, and can be picked up again -->
   <div class="bin" id="bin" inert></div>
 
-  <div class="desk" id="desk">
+  <div class="desk" id="desk" role="region" aria-label="Writing">
   <div class="stage" id="stage">
     <div class="cut"><div class="pages" id="pages"></div></div>
     <div class="under" id="under"></div>
@@ -703,11 +713,12 @@
     </div>
   </div>
 
-  <textarea id="ta" aria-label="Text" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"></textarea>
+  <span class="sr-only" id="editorInstructions">Tab moves to the tools. Shift+Tab moves back. F6 switches between writing and tools. Use Command or Control with the right bracket key to indent.</span>
+  <textarea id="ta" aria-label="Text" aria-describedby="editorInstructions" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"></textarea>
   </div>
 
   <!-- every page of the text in the machine, laid out on the table under a desk lamp -->
-  <div class="spread" id="spread" inert>
+  <div class="spread" id="spread" role="region" aria-label="Pages" inert>
     <div class="spread-roll" id="spreadRoll"><div class="spread-floor" id="spreadFloor"></div></div>
     <canvas class="spread-gl" id="sgl" aria-hidden="true"></canvas>
   </div>
@@ -731,15 +742,16 @@
       <span class="n" id="findN" aria-live="polite"></span>
       <button type="button" id="findMore" hidden></button>
     </span>
-    <nav>
+    <nav aria-label="Text tools">
       <button type="button" id="bPages" data-key="p" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
       <button type="button" id="bDrawer" data-key="d" title="Your other texts" aria-expanded="false" aria-controls="drawer">Drawer</button>
       <button type="button" id="bBackup" data-key="b" title="Download every text, the one in the machine and those in the drawer, as one file" hidden>Back up</button>
       <button type="button" id="bLamp" data-key="l" title="Lamp brightness"></button>
+      <button type="button" id="bRead" data-key="r" title="Even reading light: the whole sheet lit evenly, with crisp ink"></button>
       <button type="button" id="bSound" data-key="o" title="Typewriter sounds"></button>
       <button type="button" id="bFind" data-key="i" title="Find a word in this text, and the texts in the drawer that have it" aria-controls="find">Find</button>
       <button type="button" id="bOpen" data-key="f" title="Open a text file, or a backup; files can also be dropped on the page">Open file</button>
-      <button type="button" id="bSave" data-key="s" title="Download the text as a file">Save .txt</button>
+      <button type="button" id="bSave" data-key="s" title="Export a separate copy of this text as a .txt file">Export text…</button>
       <button type="button" id="bNew" data-key="n" title="Put this text away in the drawer and start another on a blank sheet">New text</button>
     </nav>
   </footer>
@@ -787,7 +799,7 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const S = {
   text: '', lines: [{ s: 0, e: 0 }],
-  caret: 0, row: 0, col: 0, goal: 0,   // where the head is: in the text, on the sheet, and the column it keeps to going up and down
+  anchor: 0, caret: 0, row: 0, col: 0, goal: 0,   // where the head is: in the text, on the sheet, and the column it keeps to going up and down
   scroll: 0, snapFrom: 0,          // how far the paper is rolled back, px
   cols: 0, margin: 6, chw: 0, lh: 0, fs: 0, ly: 0, vw: 0, vh: 0, left: 0,
   dh: 0, paperEnd: 0,              // the table top's height, and where a sheet still running on is cut off
@@ -797,7 +809,7 @@ const S = {
   drop: 0, dl: 0, dw: 0, hud: 0,   // the drawer: how far the view drops for it, its left edge and width; the controls' height
   at: Date.now(),                  // when the text in the machine was last typed on
   title: '',                       // ... and its name, if it has been given one
-  sound: true, lamp: 2, fresh: -1,
+  sound: true, lamp: 2, fresh: -1, reading: false, zoom: 1,
 };
 
 const store = {
@@ -953,6 +965,7 @@ function renderLines() {
       linesEl.appendChild(el);
       els.set(r, el);
     }
+    selection.paint(el, ln);
     if (el._ln !== ln) {
       el._ln = ln;
       el.innerHTML = S.text.length === 0
@@ -1629,8 +1642,8 @@ const panOf = col => (col / Math.max(1, S.cols) - .5) * .5;
 
 /* ------------------------------------------------------------------ *
  * Input. A hidden textarea owns the text (so dead keys, IME, paste and
- * undo behave natively); the caret is pinned to the end, like a machine
- * that can only type where the head is.
+ * clipboard operations behave natively). Its selection is mirrored on
+ * the paper; the moving head follows the active end of the range.
  * ------------------------------------------------------------------ */
 let composing = false;
 let composedFrom = null; // the text as it was when the browser began to put a character together
@@ -1646,7 +1659,7 @@ const edits = (() => {
   let back = [], fwd = [], run = null;      // run: what the last change was, and where it left off
   let replaying = false;
   // (at: where the head is after the change; it tells where a letter went in a run of the same ones)
-  function note(before, caret, after, at) {
+  function note(before, caret, after, at, anchor = caret) {
     if (replaying) return;
     const least = Math.min(before.length, after.length);
     let p = 0, q = 0;
@@ -1654,30 +1667,32 @@ const edits = (() => {
     while (q < least - p && before.charCodeAt(before.length - 1 - q) === after.charCodeAt(after.length - 1 - q)) q++;
     const del = before.length - p - q, add = after.length - p - q;
     const kind = add && !del ? 'type' : del && !add ? 'rub' : 'other';
-    const goesOn = run && kind === run.kind && (
+    const goesOn = anchor === caret && run && kind === run.kind && (
       kind === 'type' ? at - add === run.at && after[at - add] !== '\n' :
       kind === 'rub' ? at + del === run.at || at === run.at :      // (rubbing out backwards, or forwards)
       false);
     if (!goesOn) {
-      back.push({ text: before, caret });
+      back.push({ text: before, caret, anchor });
       if (back.length > MAX) back.shift();
     }
     fwd = [];
-    run = { kind, at };
+    run = anchor === caret ? { kind, at } : null;
   }
   function step(from, to) {
     const s = from.pop();
     if (!s) return;
-    to.push({ text: S.text, caret: S.caret });
+    to.push({ text: S.text, caret: S.caret, anchor: S.anchor });
     run = null;
     replaying = true;
     ta.value = s.text;
-    ta.setSelectionRange(s.caret, s.caret);
+    ta.setSelectionRange(Math.min(s.anchor, s.caret), Math.max(s.anchor, s.caret),
+      s.caret < s.anchor ? 'backward' : 'forward');
     onInput();
     replaying = false;
   }
   return {
     note,
+    break() { run = null; },
     undo: () => step(back, fwd),
     redo: () => step(fwd, back),
     reset() { back = []; fwd = []; run = null; },
@@ -1715,11 +1730,12 @@ function onInput() {
   }
   const old = S.text;
   if (!composing) {                         // (a character being put together is noted once it is done)
-    const from = composedFrom || { text: old, caret: S.caret };
+    const from = composedFrom || { text: old, caret: S.caret, anchor: S.anchor };
     composedFrom = null;
-    if (from.text !== v) edits.note(from.text, from.caret, v, ta.selectionEnd);
+    if (from.text !== v) edits.note(from.text, from.caret, v,
+      ta.selectionDirection === 'backward' ? ta.selectionStart : ta.selectionEnd, from.anchor);
   }
-  if (v === old) return;
+  if (v === old) { selection.nativeSelection(); return; }
 
   // what went and what came: the two texts are alike up to p, and again from q characters before their ends
   const least = Math.min(old.length, v.length);
@@ -1734,7 +1750,8 @@ function onInput() {
 
   S.text = v;
   // the head goes where the browser has put the caret: after what was typed, as a rule
-  S.caret = ta.selectionStart === ta.selectionEnd ? ta.selectionStart : p + add.length;
+  S.caret = ta.selectionDirection === 'backward' ? ta.selectionStart : ta.selectionEnd;
+  S.anchor = ta.selectionDirection === 'backward' ? ta.selectionEnd : ta.selectionStart;
   S.fresh = add.length === 1 && add !== ' ' && add !== '\n' ? S.caret - 1 : -1;
   layout(p, del, add.length);
   S.goal = S.col;
@@ -1797,7 +1814,7 @@ function setText(text) {
   S.text = text;
   S.fresh = -1;
   S.scroll = 0; S.snapFrom = 0;
-  S.caret = text.length;                    // a text is taken up where it was left: at its end
+  S.anchor = S.caret = text.length;                    // a text is taken up where it was left: at its end
   layoutAll();
   S.goal = S.col;
   place(0, 0);
@@ -1818,27 +1835,22 @@ function thud() {
 
 function insert(str) {
   ta.focus({ preventScroll: true });
-  let done = false;
-  try { done = document.execCommand('insertText', false, str); } catch { /* fall through */ }
-  if (!done) { ta.value = S.text.slice(0, S.caret) + str + S.text.slice(S.caret); ta.setSelectionRange(S.caret + str.length, S.caret + str.length); }
+  ta.setRangeText(str, ta.selectionStart, ta.selectionEnd, 'end');
   onInput();
 }
 
-// The browser's caret is kept where the head is, and nothing is ever selected: the head
-// is moved by the paper and the carriage (see goTo), not by the browser.
-function pinCaret() {
-  if (composing) return;                    // the browser is putting a character together: leave it to it
-  const n = S.caret;
-  if (ta.selectionStart !== n || ta.selectionEnd !== n) ta.setSelectionRange(n, n);
-}
+// Keep the hidden native field and the visible paper on the same range.
+function pinCaret() { selection.sync(); }
 
 // Brings the head to text index c: the paper is rolled until that line is under it and
 // the carriage is moved to the column. This is how a mistake further back is got at.
-function goTo(c, keepGoal) {
+function goTo(c, keepGoal, extend = false) {
   if (drawer.open) drawer.set(false);
   const r0 = S.row, c0 = S.col, s0 = S.scroll;
-  S.caret = c;
+  edits.break();
+  S.caret = TypelightSelection.boundary(S.text, c);
   locate();
+  if (!extend) S.anchor = S.caret;
   if (!keepGoal) S.goal = S.col;
   S.fresh = -1;
   const from = rowY(S.row) - rowY(r0) + s0;         // where the paper is now, counted from where it will be
@@ -1865,26 +1877,16 @@ function rowAt(y) {
 // The line the paper has been rolled to: the one under the head now.
 const rowAtHead = () => rowAt(rowY(S.row) - S.scroll);
 const inRow = (r, col) => S.lines[r].s + Math.max(0, Math.min(S.lines[r].e - S.lines[r].s, col));
-// The arrow keys: the carriage a character left or right, the paper a line up or down.
-// If the paper has been rolled away from the head, they first take hold of it where it is.
-function nudge(dx, dy) {
-  if (S.scroll) { goTo(inRow(rowAtHead(), S.goal), true); return; }
-  if (dx) goTo(Math.max(0, Math.min(S.text.length, S.caret + dx)));
-  else {
-    const r = S.row + dy;
-    if (r >= 0 && r <= lastRow()) goTo(inRow(r, S.goal), true);
-  }
-}
-// A click on the paper: the head goes to the character there.
-function goToPoint(x, y) {
+// Hit-testing uses the displayed transform, including a paper-feed animation.
+function pointAt(x, y, clamp = false) {
   const top = new DOMMatrixReadOnly(getComputedStyle(linesEl).transform).m42;
   const ys = y - top, k = Math.floor((ys + TOP_ROWS * S.lh) / S.pitch);
-  if (x < S.left || x > S.left + S.w || k < 0) return false;
+  if (!clamp && (x < S.left || x > S.left + S.w || k < 0)) return null;
   const down = ys - k * S.pitch;
-  if (down < -TOP_ROWS * S.lh || down > S.ph - TOP_ROWS * S.lh) return false;      // between two sheets
-  const r = Math.min(lastRow(), k * S.per + Math.max(0, Math.min(S.per - 1, Math.floor(down / S.lh))));
-  goTo(k > pageOf(lastRow()) ? S.text.length : inRow(r, Math.round((x - S.left) / S.chw - S.margin)));
-  return true;
+  if (!clamp && (down < -TOP_ROWS * S.lh || down > S.ph - TOP_ROWS * S.lh)) return null;
+  const r = Math.max(0, Math.min(lastRow(), k * S.per + Math.max(0, Math.min(S.per - 1, Math.floor(down / S.lh)))));
+  return TypelightSelection.boundary(S.text, k > pageOf(lastRow()) ? S.text.length :
+    inRow(r, Math.round((x - S.left) / S.chw - S.margin)));
 }
 
 // The platen has a ratchet: the paper only ever rests with a line under the head, never
@@ -1932,8 +1934,24 @@ function toPage(d) {
   setScroll(v, Math.abs(v - S.scroll) > S.pitch * 1.2 ? 0 : 320);      // a long way is not rolled through
 }
 
-ta.addEventListener('input', onInput);
-ta.addEventListener('compositionstart', () => { composing = true; composedFrom = { text: S.text, caret: S.caret }; });
+const selection = TypelightSelection.install({
+  state: S, input: ta, room, goTo, pointAt, render: renderLines,
+  scroll: setScroll, scrollCaret: () => inRow(rowAtHead(), S.goal),
+  breakUndo: () => edits.break(), composing: () => composing,
+  blocked: () => drawer.open || spread.open || ta.disabled, wake,
+});
+for (const type of ['copy', 'cut']) ta.addEventListener(type, event => {
+  TypelightSelection.copy(event, S.text, S.anchor, S.caret, text => {
+    edits.break(); insert(text); edits.break();
+  }, flash);
+});
+
+let separateInput = false;
+ta.addEventListener('input', () => {
+  onInput();
+  if (separateInput) { edits.break(); separateInput = false; }
+});
+ta.addEventListener('compositionstart', () => { composing = true; composedFrom = { text: S.text, caret: S.caret, anchor: S.anchor }; });
 ta.addEventListener('compositionend', () => {
   composing = false;
   onInput();
@@ -1942,19 +1960,20 @@ ta.addEventListener('compositionend', () => {
 });
 // ... and from the Edit menu, or by shaking a phone
 ta.addEventListener('beforeinput', e => {
+  if (['insertFromPaste', 'insertFromDrop', 'deleteByCut'].includes(e.inputType)) {
+    edits.break(); separateInput = true;
+  }
   if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
     e.preventDefault();
     if (e.inputType === 'historyUndo') edits.undo(); else edits.redo();
   }
 });
-ta.addEventListener('select', pinCaret);
-ta.addEventListener('focus', pinCaret);
 
 ta.addEventListener('keydown', e => {
   snd.ensure();
   const k = e.key, mod = e.metaKey || e.ctrlKey;
+  if (mod && !e.altKey && k === ']') { e.preventDefault(); insert('    '); return; }
   if (mod && (k === 's' || k === 'S')) { e.preventDefault(); saveFile(); return; }
-  if (mod && (k === 'a' || k === 'A')) { e.preventDefault(); return; }
   // undo and redo, kept by the page (see "Undo"): Cmd+Z and Cmd+Shift+Z on a Mac; Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z elsewhere
   if ((MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey && !composing) {
     const z = k === 'z' || k === 'Z', y = !MAC && (k === 'y' || k === 'Y');
@@ -1964,24 +1983,30 @@ ta.addEventListener('keydown', e => {
     if (k === 'Tab') return;                // on to the sheets in the drawer
     if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); drawer.roll(k === 'ArrowUp' ? -1 : 1); return; }
   }
+  if (composing || e.isComposing || e.keyCode === 229) return;
+  if (selection.key(e, MAC)) return;
   switch (k) {
-    case 'ArrowUp':   e.preventDefault(); if (mod) toPage(0); else nudge(0, -1); break;
-    case 'ArrowDown': e.preventDefault(); if (mod) goTo(S.text.length); else nudge(0, 1); break;
-    case 'ArrowLeft': e.preventDefault(); nudge(-1, 0); break;
-    case 'ArrowRight': e.preventDefault(); nudge(1, 0); break;
     case 'PageUp':    e.preventDefault(); toPage(-1); break;
     case 'PageDown':  e.preventDefault(); toPage(1); break;
-    case 'Home':      e.preventDefault(); if (mod) toPage(0); else goTo(S.lines[S.row].s); break;
-    case 'End':       e.preventDefault(); goTo(mod ? S.text.length : S.lines[S.row].e); break;
     // back: first the paper to where the head is, then the head to the end of the text
     case 'Escape':    if (S.scroll) setScroll(0, Math.abs(S.scroll) > S.pitch * 1.2 ? 0 : 260); else if (!atEnd()) goTo(S.text.length); break;
-    case 'Tab':       e.preventDefault(); insert('    '); break;
+    case 'Tab':       return;
     default:          strikeOnKeyDown(e);
   }
 });
 
-// keep the machine under the fingers
+// Global shortcuts respect the control that currently owns keyboard focus.
 document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || $('readingHelp')?.open) return;
+  wake();
+  if (e.key === 'F6') {
+    e.preventDefault();
+    if (hud.contains(document.activeElement)) {
+      const target = drawer.open ? $('pile').querySelector('.leaf') : spread.open ? $('spreadFloor').querySelector('.here') : ta;
+      target?.focus({ preventScroll: true });
+    } else $('bDrawer').focus({ preventScroll: true });
+    return;
+  }
   if ((MAC ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === 'o' || e.key === 'O')) {
     e.preventDefault();                     // (not the browser's own Open)
     if (!e.repeat) pickFiles();
@@ -2011,21 +2036,26 @@ document.addEventListener('keydown', e => {
     // these work the texts in the drawer (see its key handler); anything else is typing
     if (drawer.has(document.activeElement) && /^(Tab|Enter| |Shift|Alt|ArrowUp|ArrowDown|Delete|Backspace|F2)$/.test(e.key)) return;
   }
-  if (document.activeElement !== ta) ta.focus({ preventScroll: true });
 }, true);
-let pressed = null;        // where the pointer went down on the table, to tell a click from a drag
-room.addEventListener('pointerdown', e => { pressed = e.target.closest('#desk') && !e.button ? { x: e.clientX, y: e.clientY } : null; });
-room.addEventListener('pointerup', e => {
+let touchPoint = null;
+room.addEventListener('pointerdown', event => {
+  touchPoint = event.pointerType === 'touch' && event.target.closest('#desk')
+    ? { x: event.clientX, y: event.clientY } : null;
+});
+room.addEventListener('pointerup', event => {
   snd.ensure();
-  if (!e.target.closest('button, input') && !drawer.naming) ta.focus({ preventScroll: true });
-  // a click on the paper, with the drawer shut: the head goes there
-  const was = pressed;
-  pressed = null;
-  if (was && !drawer.open && S.text && e.target.closest('#desk') && Math.hypot(e.clientX - was.x, e.clientY - was.y) < 6) goToPoint(e.clientX, e.clientY);
+  if (!drawer.open && !spread.open && !event.target.closest('button, input') && !drawer.naming) ta.focus({ preventScroll: true });
+  if (touchPoint && !drawer.open && !spread.open &&
+      Math.hypot(event.clientX - touchPoint.x, event.clientY - touchPoint.y) < 6) {
+    const at = pointAt(event.clientX, event.clientY);
+    if (at !== null) goTo(at);
+  }
+  touchPoint = null;
 });
 
 // rolling the paper back to reread
 room.addEventListener('wheel', e => {
+  if (e.ctrlKey) return;                   // browser or desktop zoom keeps its native wheel gesture
   if (spread.open) return;                  // the pages scroll by themselves
   if (drawer.open) {                        // the drawer scrolls by itself; the paper stays put
     if (!drawer.has(e.target)) e.preventDefault();
@@ -3023,6 +3053,7 @@ const drawer = (() => {
   /* ---- drawing it ---- */
   // a paper clip, seen from the front: the wire goes round three times
   const CLIP = '<svg class="clip" viewBox="0 0 14 38" aria-hidden="true"><path d="M4.5 10V28a3 3 0 0 0 6 0V6.5a4.5 4.5 0 0 0-9 0V31a5.5 5.5 0 0 0 11 0V13"/></svg>';
+  let leafDescriptionId = 0;
   function leaf(sheet) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -3036,13 +3067,20 @@ const drawer = (() => {
     b.seed = seed % 97 + 1;
     if (sheet) {
       b.dataset.id = sheet.id;
+      b.setAttribute('aria-label', TypelightAccessibility.documentName(sheet));
       const many = sheetsOf(sheet) > 1;
       b.classList.toggle('thick', many);
       b.innerHTML = `<span class="slip${sheet.title ? '' : ' blank'}">${esc(sheet.title || 'Name it')}</span>` +
         (many || sheet.title ? CLIP : '') +
         `<span class="note">${esc(noteOf(sheet))}</span>` +
         `<span class="body">${esc(sheet.text.slice(0, 900))}</span>`;
+      const note = b.querySelector('.note');
+      note.id = 'drawer-description-' + (++leafDescriptionId);
+      b.setAttribute('aria-describedby', note.id);
+      b.querySelector('.body').setAttribute('aria-hidden', 'true');
+      b.querySelector('.slip').setAttribute('aria-hidden', 'true');
     } else {
+      b.setAttribute('aria-label', 'Start a new text');
       b.innerHTML = '<span class="body"><span class="ghost">A blank sheet</span></span>';
     }
     return b;
@@ -3145,6 +3183,7 @@ const drawer = (() => {
     if (v) well.scrollTop = 0;
     root.classList.toggle('drawer-open', v);
     el.inert = binEl.inert = !v;
+    $('desk').inert = v;
     btn.setAttribute('aria-expanded', v);
     label(btn, v ? 'Close drawer' : 'Drawer');
     $('bBackup').hidden = !v;
@@ -3152,7 +3191,8 @@ const drawer = (() => {
     peek = '';
     paintCount();
     find.sync();
-    if (!v) ta.focus({ preventScroll: true });
+    if (v) (pile.querySelector('.leaf[data-id]') || pile.querySelector('.leaf'))?.focus({ preventScroll: true });
+    else ta.focus({ preventScroll: true });
     drawerLight.set(v);
     if (!reduce) snd.drawer(v, v ? .74 : .42);      // when it reaches its stop: as timed in the stylesheet
     wake();
@@ -3192,7 +3232,7 @@ const drawer = (() => {
       render();
       well.scrollTop = top;
       const again = [...pile.children].find(k => k.dataset.id === sh.id);
-      if (again && viaKeys) again.focus(); else ta.focus({ preventScroll: true });
+      if (again) again.focus({ preventScroll: true });
     };
     inp.addEventListener('keydown', e => {
       e.stopPropagation();
@@ -3838,6 +3878,7 @@ void main() {
     open = v;
     root.classList.toggle('pages-open', v);
     el.inert = !v;
+    $('desk').inert = v;
     btn.setAttribute('aria-expanded', v);
     label(btn, v ? 'Close pages' : 'Pages');
     if (v) {
@@ -4034,8 +4075,9 @@ function kept(what, ok) {
   if (ok) unsaved.delete(what); else unsaved.add(what);
   const w = $('warn');
   w.hidden = !unsaved.size;
-  w.title = 'This browser would not store ' + (unsaved.size > 1 ? 'the text or the drawer' : unsaved.has('text') ? 'the text in the machine' : 'the drawer') +
-    ': its storage is full, or switched off for this site. Save .txt, or Back up in the drawer, keeps a copy in a file.';
+  const labels = { text: 'the text in the machine', drawer: 'the drawer', preferences: 'your preferences' };
+  w.title = 'This browser would not store ' + [...unsaved].map(key => labels[key] || key).join(' or ') +
+    ': its storage is full, or switched off for this site. Export text, or Back up in the drawer, keeps a copy in a file.';
   if (!ok) wake();
 }
 
@@ -4046,7 +4088,7 @@ function kept(what, ok) {
 let behind = false;
 window.addEventListener('storage', e => {
   if (DEMO || e.storageArea !== localStorage) return;
-  if (e.key === PREF_KEY) { readPrefs(); paintPrefs(); return; }
+  if (e.key === PREF_KEY) { readPrefs(); paintPrefs(); accessibility.refresh(); accessibility.initialize(); return; }
   if (e.key === null || e.key === TEXT_KEY || e.key === AT_KEY || e.key === TITLE_KEY || e.key === PILE_KEY) behind = true;
 });
 function catchUp() {
@@ -4108,17 +4150,21 @@ function touched() {
 }
 function wake() { hud.classList.remove('quiet'); }
 
-function savePrefs() { store.set(PREF_KEY, JSON.stringify({ sound: S.sound, lamp: S.lamp })); }
+function savePrefs() {
+  kept('preferences', store.set(PREF_KEY, JSON.stringify({ sound: S.sound, lamp: S.lamp, reading: S.reading, zoom: S.zoom })));
+}
 function paintPrefs() {
   root.style.setProperty('--lamp', LAMPS[S.lamp]);
   light.wake();
   drawerLight.wake();
   spread.wake();
   label($('bLamp'), 'Lamp: ' + LAMP_NAMES[S.lamp]);
+  paintReading();
   const bs = $('bSound');
   label(bs, 'Sound: ' + (snd.failed ? 'unavailable' : S.sound ? 'on' : 'off'));
-  bs.title = keyed(bs, soundTitle());
+  bs.dataset.help = keyed(bs, soundTitle());
 }
+function paintReading() { label($('bRead'), 'Reading: ' + (S.reading ? 'on' : 'off')); }
 
 // The menu by keyboard: Alt and a letter of the word, which is underlined. On a Mac it
 // is Control, because Option and a letter is how characters are typed there.
@@ -4133,7 +4179,8 @@ function label(b, text) {
 }
 function keyed(b, title) {
   const k = MENU_MOD + '+' + b.dataset.key.toUpperCase();
-  const also = { bSave: 'S', bOpen: 'O' }[b.id];
+  // (the desktop app's menu also has Cmd/Ctrl+Shift+R; in a browser that reloads the page)
+  const also = { bSave: 'S', bOpen: 'O', ...(desktop ? { bRead: MAC ? '⇧R' : 'Shift+R' } : {}) }[b.id];
   return title.replace(/\.$/, '') + ' (' + (also ? (MAC ? '⌘' : 'Ctrl+') + also + ' or ' : '') + k + ')';
 }
 // The item a key press asks for, if it is one of these.
@@ -4180,15 +4227,17 @@ function download(name, content, type) {
 for (const b of hud.querySelectorAll('nav button')) {
   b.addEventListener('pointerdown', e => e.preventDefault());   // typing focus stays on the paper
   if (b.textContent) label(b, b.textContent);
-  b.title = keyed(b, b.title);
+  b.dataset.help = keyed(b, b.title);
+  b.removeAttribute('title');
   b.setAttribute('aria-keyshortcuts', (MAC ? 'Control+' : 'Alt+') + b.dataset.key.toUpperCase());
 }
 $('bLamp').addEventListener('click', () => { S.lamp = (S.lamp + 1) % LAMPS.length; paintPrefs(); savePrefs(); });
+$('bRead').addEventListener('click', () => accessibility.command('readingMode'));
 $('bSound').addEventListener('click', () => {
   S.sound = !S.sound; paintPrefs(); savePrefs();
   if (S.sound) snd.key(0);
 });
-$('bSound').addEventListener('pointerenter', e => { e.currentTarget.title = keyed(e.currentTarget, soundTitle()); });
+$('bSound').addEventListener('pointerenter', e => { e.currentTarget.dataset.help = keyed(e.currentTarget, soundTitle()); });
 // Opening files: text files, or backups. Chosen with "Open file" (or Cmd/Ctrl+O), or dropped
 // anywhere on the page. A text file is read as UTF-8 and its lines are ended the one way;
 // its name, less the ending, becomes the name of the text.
@@ -4314,11 +4363,15 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) persi
 function readPrefs() {
   try {
     const p = JSON.parse(store.get(PREF_KEY) || '{}');
+    Object.assign(S, TypelightAccessibility.preferences(p));
     if (typeof p.sound === 'boolean') S.sound = p.sound;
     if (Number.isInteger(p.lamp) && p.lamp >= 0 && p.lamp < LAMPS.length) S.lamp = p.lamp;
   } catch { /* defaults */ }
 }
 readPrefs();
+const accessibility = TypelightAccessibility.install({ state: S, save: savePrefs, measure, desktop, demo: DEMO,
+  focusWriting: () => ta.focus({ preventScroll: true }), changed: paintReading });
+TypelightTooltips.install();
 paintPrefs();
 
 snd.load().then(paintPrefs);
@@ -4327,11 +4380,12 @@ S.text = store.get(TEXT_KEY) || '';
 S.at = Number(store.get(AT_KEY)) || Date.now();
 S.title = store.get(TITLE_KEY) || '';
 ta.value = S.text;
-S.caret = S.text.length;
+S.anchor = S.caret = S.text.length;
 light.init();
 drawerLight.init();
 spread.init();
 measure();
+accessibility.initialize();
 persist();
 ta.focus({ preventScroll: true });
 pinCaret();
@@ -4397,15 +4451,17 @@ if (desktop) desktop.attach({
   preparePrint() { const old = $('print'); if (old) old.remove(); printSheets(); },
   finishPrint() { const old = $('print'); if (old) old.remove(); },
   command(action) {
+    const handled = accessibility.command(action);
+    if (handled) return handled;
     if (action === 'undo') edits.undo();
     else if (action === 'redo') edits.redo();
     else if (action === 'copyText') return S.text;
     else if (action === 'focus') { drawer.set(false); spread.set(false); find.close(); }
-    else if (/^b(?:Drawer|Pages|New|Open|Save|Backup|Find|Lamp|Sound)$/.test(action)) {
+    else if (/^b(?:Drawer|Pages|New|Open|Save|Backup|Find|Lamp|Read|Sound)$/.test(action)) {
       const button = $(action);
       if (action === 'bBackup' || !button.hidden) button.click();
     }
-    if (action !== 'bFind') ta.focus({ preventScroll: true });
+    if (['undo', 'redo', 'focus'].includes(action)) ta.focus({ preventScroll: true });
     wake();
     return null;
   },

@@ -14,6 +14,7 @@ files:
   - LICENSE
   - desktop/electron/**
   - desktop/web/**
+  - editor/**
   - fonts/**
   - icons/**
   - sounds/**

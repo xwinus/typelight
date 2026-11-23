@@ -1,4 +1,4 @@
-const CHANNEL_TYPES = new Set(['ready', 'state', 'save', 'open', 'export']);
+const CHANNEL_TYPES = new Set(['ready', 'state', 'save', 'open', 'export', 'zoom']);
 
 function trustedFrame(event, window, seed = false) {
   if (!window || window.isDestroyed() || event.sender !== window.webContents ||
@@ -14,6 +14,9 @@ function validateMessage(message) {
   if (message.type === 'export' && (typeof message.name !== 'string' ||
       typeof message.content !== 'string' || !message.name || message.name.includes('\0'))) {
     throw new Error('Invalid export.');
+  }
+  if (message.type === 'zoom' && ![.75, 1, 1.25, 1.5, 1.75, 2].includes(message.factor)) {
+    throw new Error('Invalid zoom factor.');
   }
   return message;
 }

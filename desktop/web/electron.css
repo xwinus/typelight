@@ -21,6 +21,27 @@
   position: fixed; inset: 0 0 auto; height: 36px; z-index: 20;
   -webkit-app-region: drag; app-region: drag;
 }
+/* Help is window chrome: in the title bar, centred on the row of the window's own buttons and
+   as far from the other edge as they are from theirs. Their centre is 24.75pt from the left and
+   22.5pt from the top (trafficLightPosition in main.cjs); a 32px target is 16 to its middle. It
+   keeps its size when the interface is zoomed, as they do. */
+.electron .reading-help-button {
+  --z: var(--ui-zoom, 1);
+  z-index: 21; top: calc(6.5px / var(--z)); right: calc(8.75px / var(--z));
+  width: calc(32px / var(--z)); height: calc(32px / var(--z));
+  border: 0; background: none; color: #dcc9aa; font-size: calc(12px / var(--z));
+  -webkit-app-region: no-drag; app-region: no-drag;
+}
+.electron .reading-help-button::before {
+  content: ''; position: absolute; z-index: -1; inset: calc(5.5px / var(--z)); border-radius: 50%;
+  border: calc(1px / var(--z)) solid #c8b3915c; background: #25211de6;
+  transition: background .16s ease;
+}
+.electron .reading-help-button:hover { background: none; }
+.electron .reading-help-button:hover::before { background: #42372a; }
+.electron .reading-help-button:focus-visible { outline-offset: calc(-3px / var(--z)); }
+/* On Windows and Linux the window's buttons are on the right, so help goes to the left. */
+.electron:not([data-platform='darwin']) .reading-help-button { right: auto; left: calc(2px / var(--z)); top: calc(2px / var(--z)); }
 .electron .hud {
   left: 50%; right: auto; bottom: 22px; transform: translateX(-50%);
   width: max-content; max-width: calc(100vw - 40px); min-height: 54px;
@@ -45,7 +66,7 @@
 }
 /* Every tool stays present: unavailable tools are disabled, never empty slots. */
 .electron .hud nav {
-  display: grid; grid-template-columns: repeat(8, 36px);
+  display: grid; grid-template-columns: repeat(9, 36px);
   gap: 4px; flex: 0 0 auto; align-items: center;
 }
 .electron .hud nav button {
@@ -60,15 +81,6 @@
   content: ''; display: block; width: 19px; height: 19px;
   background: currentColor; mask: var(--tool-icon) center / contain no-repeat;
 }
-.electron .hud nav button::after {
-  content: attr(aria-label); position: absolute; bottom: calc(100% + 18px); left: 50%;
-  transform: translate(-50%, 4px); padding: 8px 11px; border-radius: 8px;
-  background: #25221f; color: #e7ddce; border: 1px solid #4a4238;
-  box-shadow: 0 4px 12px #0003; font: 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  white-space: nowrap; pointer-events: none; opacity: 0;
-  transition: opacity .15s ease, transform .15s ease;
-}
-.electron .hud nav button:is(:hover, :focus-visible)::after { opacity: 1; transform: translate(-50%, 0); }
 .electron .hud nav button:hover { background: #fff1db0d; color: #f2e5d2; }
 .electron .hud nav button:active { transform: translateY(1px); }
 .electron .hud nav button:disabled { color: #6e685e; cursor: default; }
@@ -83,11 +95,13 @@
 .electron #bSave { grid-column: 5; }
 .electron #bFind { grid-column: 6; }
 .electron #bLamp { grid-column: 7; }
-.electron #bSound { grid-column: 8; }
+.electron #bRead { grid-column: 8; }
+.electron #bSound { grid-column: 9; }
 .electron #bSound[aria-label='Sound: off'] { color: #80796e; }
 .electron #bSound[aria-label='Sound: unavailable'] { color: #e6a16e; }
 .electron #bLamp[aria-label='Lamp: low'] { color: #82796a; }
 .electron #bLamp[aria-label='Lamp: full'] { color: #d5bd94; }
+.electron #bRead[aria-label='Reading: on'] { background: #ddbe851a; color: #dfc49b; }
 .electron .desktop-status {
   display: block; flex: 0 0 5px; width: 5px; height: 5px;
   border-radius: 50%; background: #9baf91; font-size: 0; color: transparent;
@@ -124,7 +138,7 @@
   .electron .hud { background: #25221f; backdrop-filter: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .electron .hud nav button, .electron .hud nav button::after { transition: none; }
+  .electron .hud nav button { transition: none; }
 }
 @media print {
   .electron .window-drag, .electron .hud { display: none; }

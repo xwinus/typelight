@@ -24,8 +24,10 @@ builds, storage, and verification limits.
 The checklist below remains the wider commercial release gate; initial desktop
 implementation does not imply all release criteria are met.
 
-Remaining gaps include selecting and copying part of a document and preparing
-signed, notarized public distribution with a commercial purchase flow.
+Mouse and keyboard selection, copying, cutting, and replacement are implemented,
+with regression checks for native selection, composition, and undo restoration.
+Remaining gaps include preparing signed, notarized public distribution with a
+commercial purchase flow.
 The existing `#demo` intentionally disables saving. Browser and real-device
 checks listed in TODO remain necessary for the surfaces supported at launch.
 
@@ -33,10 +35,12 @@ checks listed in TODO remain necessary for the surfaces supported at launch.
 
 Required before asking testers to rely on Typelight for personal writing.
 
-- [ ] Support selecting and copying part of a document with keyboard and
-  pointer input. Define how the selection interacts with the moving caret.
-- [ ] Preserve paste, insertion, deletion, navigation, search, and grouped
-  undo and redo when selection is introduced.
+- [x] Support selecting and copying part of a document with keyboard and
+  mouse input. The paper stays still during dragging; the head follows the active
+  end on release. Touch dragging retains its existing scrolling behavior.
+- [ ] Verify selection with paste, insertion, deletion, navigation, search, and
+  grouped undo/redo across the supported platforms. Automated Mac runtime checks
+  cover replacement, multiline paste, composition, clipboard, and undo/redo.
 - [ ] Verify real Czech dead-key input, accented text, and composition input.
 - [ ] Verify text import and export, file naming, and print or PDF output on
   macOS, Windows, and Linux.
@@ -101,6 +105,9 @@ macOS, Windows, and Linux are required. Build and test on each target system.
   supported scale, and any visible performance limits.
 - [ ] Verify keyboard operation, reduced motion, sound controls, and the
   fallback without WebGL.
+- [ ] Verify VoiceOver and NVDA on target systems. Keyboard navigation, modal
+  help, even reading light, 75–200% desktop zoom, concise document labels, and
+  quiet autosave announcements are implemented with automated Mac checks.
 
 Acceptance: an external tester can install the application, write offline,
 restart it, recover a version, and install an update without losing documents.
@@ -182,8 +189,8 @@ Keep release checks separate from commercial validation results.
 
 ## First implementation tasks
 
-1. Implement selection and copying with regression checks for caret movement,
-   composition input, and undo.
+1. Validate selection and copying on Windows and Linux and with real composition
+   input; automated Mac checks cover caret movement, composition, and undo.
 2. Verify existing backup and restore behavior, then establish the shared
    document and storage boundaries for the desktop version.
 3. Verify file persistence, automatic backup, recovery, audio, and packaging
