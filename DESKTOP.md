@@ -62,15 +62,21 @@ bundle to `build/Typelight.app` for the local installer.
 Cross-compilation is not the release verification strategy. GitHub Actions has
 two separate workflows:
 
-- **Unit tests** runs `npm test` on Linux for every branch push and pull request.
-  It skips downloading the Electron binary and does not build installers.
+- **Unit tests** runs `npm test` on Linux for pushes to `master` and for pull
+  requests. Feature-branch pushes do not start a second run alongside their PR;
+  branches without a PR are tested locally until they are proposed for merging.
+  The job uses Node's built-in test runner without installing dependencies or
+  downloading Electron, and has a five-minute timeout. Newer runs cancel older
+  unfinished unit-test runs for the same branch or PR.
 - **Desktop builds** runs unit tests, Electron runtime tests, and packaging on
   the selected operating systems. Start it manually from Actions with `all`,
   `mac`, `win`, or `linux`. Mac includes Apple Silicon and Intel. Pushing a tag
   starting with `v` (for example `v0.1.0`) always runs every desktop target.
+  Platform selection has a five-minute timeout; each desktop build has a
+  thirty-minute timeout.
 
 Desktop builds upload DMG/ZIP, Windows x64 NSIS, and Linux x64 AppImage/DEB files
-as workflow artifacts only; they do not publish a release. Ordinary branch pushes
+as workflow artifacts retained for seven days; they do not publish a release. Ordinary branch pushes
 and pull requests do not trigger desktop builds, and no nightly build is scheduled.
 Installation and manual runtime checks remain required even after packaging succeeds.
 
