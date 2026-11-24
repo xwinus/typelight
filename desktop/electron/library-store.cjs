@@ -15,6 +15,21 @@ function parseJSON(value, name) {
   try { return JSON.parse(value); } catch { throw invalid(`invalid ${name}`); }
 }
 
+function validDrawerItem(item) {
+  if (!isObject(item) || typeof item.id !== 'string' || typeof item.text !== 'string') return false;
+  if (item.title !== undefined && typeof item.title !== 'string') return false;
+  for (const key of ['at', 'gone']) {
+    if (item[key] !== undefined && (!Number.isFinite(item[key]) || item[key] < 0)) return false;
+  }
+  for (const key of ['fx', 'fy']) {
+    if (item[key] !== undefined && !Number.isFinite(item[key])) return false;
+  }
+  if (item.side !== undefined && !['left', 'right'].includes(item.side)) return false;
+  if (item.spin !== undefined && (!isObject(item.spin) ||
+      !['ax', 'ay', 'angle'].every(key => Number.isFinite(item.spin[key])))) return false;
+  return true;
+}
+
 function validate(values) {
   if (!isObject(values) || ![Object.prototype, null].includes(Object.getPrototypeOf(values))) {
     throw invalid('unsupported value types');
@@ -32,11 +47,12 @@ function validate(values) {
   }
   if (values['typelight.drawer'] !== undefined) {
     const drawer = parseJSON(values['typelight.drawer'], 'drawer contents');
-    if (!isObject(drawer) || drawer.v !== 1 || !Array.isArray(drawer.pile) || !Array.isArray(drawer.bin) ||
-        ![...drawer.pile, ...drawer.bin].every(item => isObject(item) &&
-          typeof item.id === 'string' && typeof item.text === 'string')) {
+    if (!isObject(drawer) || drawer.v !== 1 || !Array.isArray(drawer.pile) || !Array.isArray(drawer.bin)) {
       throw invalid('invalid drawer contents');
     }
+    const items = [...drawer.pile, ...drawer.bin];
+    if (!items.every(validDrawerItem)) throw invalid('invalid drawer document metadata');
+    if (new Set(items.map(item => item.id)).size !== items.length) throw invalid('duplicate drawer document identifiers');
   }
   if (values['typelight.prefs'] !== undefined && !isObject(parseJSON(values['typelight.prefs'], 'preferences'))) {
     throw invalid('invalid preferences');
@@ -119,10 +135,7 @@ class LibraryStore {
     const values = Object.fromEntries(Object.entries(replacement).sort(([a], [b]) => a.localeCompare(b)));
     const data = Buffer.from(JSON.stringify({ version: 1, values }));
     if (data.length > MAXIMUM_BYTES) throw tooLarge();
-    const current = readSnapshot(this.filePath);
-    if (current === null ? this.#persistedData !== null : !this.#persistedData?.equals(current)) {
-      throw new Error('The library changed outside this application. Keep a copy of your text before reopening Typelight.');
-    }
+    this.#assertUnchanged();
     const sameValues = Object.keys(values).length === Object.keys(this.#values).length &&
       Object.entries(values).every(([key, value]) => this.#values[key] === value);
     if (sameValues && this.#persistedData !== null) return;
@@ -141,12 +154,41 @@ class LibraryStore {
     try { this.#pruneBackups(); } catch { /* An already completed save must remain successful. */ }
   }
 
-  #pruneBackups() {
-    const snapshots = fs.readdirSync(this.backupsDirectory, { withFileTypes: true })
+  checkpoint() {
+    this.#assertUnchanged();
+    if (this.#persistedData === null) return false;
+    fs.mkdirSync(this.backupsDirectory, { recursive: true, mode: 0o700 });
+    const snapshots = this.#snapshotNames();
+    const latest = snapshots[0];
+    if (latest && readSnapshot(path.join(this.backupsDirectory, latest))?.equals(this.#persistedData)) {
+      this.#pruneBackups();
+      return false;
+    }
+    // Keep the completed session newest even if the clock moves back or two saves share a millisecond.
+    const now = this.#clock();
+    const timestamp = Math.max(Math.trunc(now), latest ? Number(latest.split('-')[1]) + 1 : 0);
+    atomicWrite(path.join(this.backupsDirectory, `library-${timestamp}-${randomUUID()}.json`), this.#persistedData);
+    this.#lastBackupTime = now;
+    this.#pruneBackups();
+    return true;
+  }
+
+  #assertUnchanged() {
+    const current = readSnapshot(this.filePath);
+    if (current === null ? this.#persistedData !== null : !this.#persistedData?.equals(current)) {
+      throw new Error('The library changed outside this application. Keep a copy of your text before reopening Typelight.');
+    }
+  }
+
+  #snapshotNames() {
+    return fs.readdirSync(this.backupsDirectory, { withFileTypes: true })
       .filter(entry => entry.isFile() && /^library-\d+-[\w-]+\.json$/.test(entry.name))
       .map(entry => entry.name)
       .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]) || b.localeCompare(a));
-    for (const name of snapshots.slice(30)) fs.unlinkSync(path.join(this.backupsDirectory, name));
+  }
+
+  #pruneBackups() {
+    for (const name of this.#snapshotNames().slice(30)) fs.unlinkSync(path.join(this.backupsDirectory, name));
   }
 }
 

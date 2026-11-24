@@ -8,6 +8,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const { LibraryStore, MAXIMUM_BYTES } = require('../desktop/electron/library-store.cjs');
+const { readFiles, BACKUP_BYTES } = require('../editor/import.js');
 
 const sourcePath = path.resolve(__dirname, '../desktop/electron/files.cjs');
 const localRequire = createRequire(sourcePath);
@@ -66,6 +67,43 @@ test('openFiles rejects oversized and unreadable files without changing source f
   assert.equal(fs.statSync(file).size, 8_000_001);
   h.open.filePaths[0] = path.join(h.directory, 'missing.txt');
   await assert.rejects(h.files.openFiles(h.window), /ENOENT/);
+});
+
+test('a portable backup larger than 8 MB survives export, native open and shared decoding', async t => {
+  const h = harness(t, { open: { canceled: false, filePaths: [] }, save: { canceled: false } });
+  const backup = { typelight: 1, machine: { text: 'Příliš žluťoučký 🐎' },
+    drawer: [{ text: 'a'.repeat(8_000_001), title: 'Long manuscript' }] };
+  const content = JSON.stringify(backup);
+  h.save.filePath = path.join(h.directory, 'Portable.JSON');
+  assert.equal((await h.files.exportFile(h.window, { name: 'Portable.json', content })).saved, true);
+  h.open.filePaths.push(h.save.filePath);
+  const [opened] = await h.files.openFiles(h.window);
+  const file = new File([Buffer.from(opened.data, 'base64')], opened.name, { type: opened.type });
+  const result = await readFiles([file]);
+  assert.equal(opened.type, 'application/json');
+  assert.deepEqual(result.items, [backup.machine, ...backup.drawer]);
+  assert.deepEqual(result.not, []);
+});
+
+test('native file selection accepts a backup at the exact shared size limit', async t => {
+  const h = harness(t, { open: { canceled: false, filePaths: [] } });
+  const file = path.join(h.directory, 'boundary.json');
+  fs.writeFileSync(file, '');
+  fs.truncateSync(file, BACKUP_BYTES);
+  h.open.filePaths.push(file);
+  const [opened] = await h.files.openFiles(h.window);
+  assert.equal(Buffer.from(opened.data, 'base64').length, BACKUP_BYTES);
+  assert.equal(BACKUP_BYTES, MAXIMUM_BYTES);
+});
+
+test('native file selection rejects oversized backups before loading any bytes', async t => {
+  const h = harness(t, { open: { canceled: false, filePaths: [] } });
+  const file = path.join(h.directory, 'oversized.json');
+  fs.writeFileSync(file, '');
+  fs.truncateSync(file, BACKUP_BYTES + 1);
+  h.open.filePaths.push(file);
+  await assert.rejects(h.files.openFiles(h.window), /exceeds the file size limit/);
+  assert.equal(fs.statSync(file).size, BACKUP_BYTES + 1);
 });
 
 test('exportFile writes Unicode atomically and strips suggested directory components', async t => {

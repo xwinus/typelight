@@ -81,6 +81,14 @@ Acceptance: normal saves, interrupted saves, unavailable locations, malformed
 data, and recovery from backup have verified outcomes. Backups on the same
 device must not be described as protection against losing that device.
 
+Automated development-Mac checks now cover startup recovery from a damaged or
+missing primary library, preservation of the original, cancellation and recovery
+failures, portable backups above 8 MB, malformed backup rejection, process
+termination at three write stages, and a latest-state snapshot on normal close.
+The Electron recovery test also verifies that a failed close snapshot leaves
+the editor open and unlocked for retry. Cross-platform release verification
+remains pending; the broader checkboxes above are not a claim of missing code.
+
 ## Stage 3 Package a desktop beta
 
 macOS, Windows, and Linux are required. Build and test on each target system.

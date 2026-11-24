@@ -13,7 +13,7 @@ function harness(t, { seed = {}, send = async () => true, electron = false, impo
     } } } },
     document: { getElementById: () => null, documentElement: {} },
     MutationObserver: class { observe() {} },
-    File, Uint8Array, atob,
+    File, Uint8Array, atob, TextEncoder,
     setTimeout(fn, ms) {
       const timer = setTimeout(() => { timers.delete(timer); fn(); }, ms);
       timers.add(timer);
@@ -206,4 +206,36 @@ test('a failed ongoing import prevents closing and unlocks the editor', async t 
   reject(new Error('Unreadable file'));
   await Promise.all([imported, closing]);
   assert.deepEqual(locks, [true, false]);
+});
+
+test('capacity preflight combines pending preferences and document values without saving or mutating them', t => {
+  const { bridge, calls } = harness(t, { seed: { 'typelight.text': 'Keep', 'typelight.prefs': '{"sound":true}' } });
+  assert.equal(bridge.canStore({ 'typelight.drawer': '{"v":1,"pile":[],"bin":[]}', 'typelight.text': 'Příběh 🐎' }), true);
+  assert.equal(bridge.get('typelight.text'), 'Keep');
+  assert.equal(bridge.get('typelight.drawer'), null);
+  assert.equal(calls.filter(call => call.type === 'save').length, 0);
+});
+
+test('capacity preflight uses the exact UTF-8 snapshot boundary including JSON escaping and metadata', t => {
+  const maximum = 50 * 1024 * 1024;
+  const prefs = '{"sound":true}';
+  const drawer = '{"v":1,"pile":[],"bin":[{"id":"bin","text":"Discarded"}]}';
+  const seed = { 'typelight.prefs': prefs, 'typelight.drawer': drawer, 'typelight.title': 'Český 🐎',
+    'typelight.edited': '123', 'typelight.text': '\n"\\🐎' };
+  const overhead = Buffer.byteLength(JSON.stringify({ version: 1, values: seed }));
+  const { bridge } = harness(t, { seed });
+  const exact = seed['typelight.text'] + 'x'.repeat(maximum - overhead);
+  assert.equal(bridge.canStore({ 'typelight.text': exact }), true);
+  assert.equal(bridge.canStore({ 'typelight.text': exact + 'x' }), false);
+  assert.equal(bridge.get('typelight.text'), seed['typelight.text']);
+});
+
+test('capacity preflight rejects unsupported values and accounts for pending state before saves finish', t => {
+  const { bridge } = harness(t);
+  for (const replacement of [null, [], { password: 'unknown' }, { 'typelight.text': 3 },
+    { get 'typelight.text'() { throw new Error('Unavailable value'); } }]) {
+    assert.equal(bridge.canStore(replacement), false);
+  }
+  bridge.set('typelight.prefs', 'x'.repeat(50 * 1024 * 1024));
+  assert.equal(bridge.canStore({ 'typelight.text': 'Small import' }), false);
 });

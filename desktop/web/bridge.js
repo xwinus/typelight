@@ -14,6 +14,15 @@
 
   const request = message => Promise.resolve().then(() => host.postMessage(message));
 
+  function canStore(replacement) {
+    if (!replacement || typeof replacement !== 'object' || Array.isArray(replacement)) return false;
+    try {
+      if (Object.entries(replacement).some(([key, value]) => !allowed.has(key) || typeof value !== 'string')) return false;
+      const snapshot = { version: 1, values: { ...values, ...replacement } };
+      return new TextEncoder().encode(JSON.stringify(snapshot)).byteLength <= 50 * 1024 * 1024;
+    } catch { return false; }
+  }
+
   function report() {
     clearTimeout(stateTimer);
     stateTimer = setTimeout(() => {
@@ -112,6 +121,7 @@
   window.typelightDesktop = Object.freeze({
     get: key => allowed.has(key) ? values[key] ?? null : null,
     set,
+    canStore,
     markDirty() { dirty = true; report(); },
     async flush() {
       if (!editor) throw new Error('The editor is not ready yet.');

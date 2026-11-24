@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { dialog, shell } = require('electron');
 const { LibraryStore, MAXIMUM_BYTES, atomicWrite } = require('./library-store.cjs');
+const { isBackup, limitFor } = require('../../editor/import.js');
 
 function readLimited(file, limit) {
   if (fs.statSync(file).size > limit) throw new Error(`${path.basename(file)} exceeds the file size limit.`);
@@ -17,8 +18,8 @@ async function openFiles(window) {
       { name: 'All files', extensions: ['*'] }] });
   if (result.canceled) return [];
   return result.filePaths.map(file => ({ name: path.basename(file),
-    data: readLimited(file, 8_000_000).toString('base64'), modified: fs.statSync(file).mtimeMs,
-    type: path.extname(file) === '.json' ? 'application/json' : 'text/plain' }));
+    data: readLimited(file, limitFor({ name: file })).toString('base64'), modified: fs.statSync(file).mtimeMs,
+    type: isBackup({ name: file }) ? 'application/json' : 'text/plain' }));
 }
 
 async function exportFile(window, message) {

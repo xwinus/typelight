@@ -1,8 +1,8 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
-const { app, BrowserWindow, protocol, ipcMain, dialog, clipboard, session, Menu } = require('electron');
-const { LibraryStore } = require('./library-store.cjs');
+const { app, BrowserWindow, protocol, ipcMain, dialog, clipboard, session, Menu, shell } = require('electron');
+const { openLibrary } = require('./library-recovery.cjs');
 const { assetResponse } = require('./assets.cjs');
 const { trustedFrame, validateMessage } = require('./policy.cjs');
 const files = require('./files.cjs');
@@ -37,7 +37,8 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
   app.on('second-instance', () => { if (window) { window.show(); window.focus(); } });
   await app.whenReady();
   if (!dataDirectory) checkLegacyApp();
-  library = new LibraryStore(directory);
+  library = await openLibrary(directory, { dialog, shell });
+  if (!library) { app.quit(); return null; }
   const root = path.resolve(__dirname, '../..');
   protocol.handle('typelight', request => assetResponse(request, root));
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -113,7 +114,15 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
         deadline = setTimeout(() => reject(new Error('Saving took too long. Keep the window open and export a copy.')), 15000);
       });
       Promise.race([window.webContents.executeJavaScript('window.typelightDesktop.flush()'), timeout])
-        .then(() => { mayClose = true; window.close(); })
+        .then(() => {
+          try { library.checkpoint(); }
+          catch (error) {
+            throw new Error('The automatic backup could not be completed. Typelight has stayed open. ' +
+              'Export a library backup to keep a separate copy, then resolve the problem below before closing again.\n\n' + error.message);
+          }
+          mayClose = true;
+          window.close();
+        })
         .catch(error => {
           closing = false; quitting = false;
           window.webContents.executeJavaScript('window.typelightDesktop.unlock()').catch(() => {});

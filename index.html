@@ -680,6 +680,7 @@
 <link rel="stylesheet" href="editor/metal.css">
 <script src="editor/metal.js"></script>
 <script src="editor/selection.js"></script>
+<script src="editor/import.js"></script>
 <script src="editor/accessibility.js"></script>
 <script src="editor/tooltips.js"></script>
 </head>
@@ -3158,14 +3159,14 @@ const drawer = (() => {
   /* ---- taking a sheet out, putting one away ---- */
   // The sheet in the machine goes on top of the pile (a blank one is just dropped), and
   // the chosen one, or a blank one, goes into the machine.
-  function swap(id) {
+  function swap(id, parked = null) {
     letGo();
     const next = id ? sheets.find(x => x.id === id) : null;
     if (id && !next) return;
     persist();
     if (next) sheets.splice(sheets.indexOf(next), 1);
     const had = S.text.trim() !== '';
-    if (had) sheets.unshift({ id: uid(), text: S.text, at: S.at, ...(S.title && { title: S.title }) });
+    if (had) sheets.unshift(parked || { id: uid(), text: S.text, at: S.at, ...(S.title && { title: S.title }) });
     if (next || had) {
       S.at = next ? next.at : Date.now();
       S.title = next && next.title || '';
@@ -3565,12 +3566,20 @@ const drawer = (() => {
   function bring(items, { machine = false, not = [] } = {}) {
     const all = items.filter(x => x && typeof x.text === 'string' && x.text.trim());
     const notes = not.length ? ' ' + (not.length === 1 ? `(${not[0]} is not a text file or a Typelight backup.)` : `(${not.length} of the files are not text files or Typelight backups.)`) : '';
-    const ids = new Set(sheets.map(x => x.id));
+    const ids = new Set([...sheets, ...bin].map(x => x.id));
     const make = x => {
       const id = typeof x.id === 'string' && x.id && !ids.has(x.id) ? x.id : uid();
       ids.add(id);
       const title = typeof x.title === 'string' ? x.title.trim().slice(0, 120) : '';
       return { id, text: x.text, at: Number.isFinite(x.at) ? x.at : Date.now(), ...(title && { title }) };
+    };
+    const fits = (pile, current = S) => {
+      if (!desktop || desktop.canStore({
+        [TEXT_KEY]: current.text, [TITLE_KEY]: current.title || '', [AT_KEY]: String(current.at),
+        [PILE_KEY]: JSON.stringify({ v: 1, pile, bin }),
+      })) return true;
+      tell('Nothing was imported: the combined library would exceed the 50 MiB storage limit. Export and remove some texts before trying again.', 9000);
+      return false;
     };
     if (!all.length) {
       tell(not.length ? (not.length === 1 ? `${not[0]} is not a text file or a Typelight backup.` : 'None of those files is a text file or a Typelight backup.') : 'There is no text in that.', 6000);
@@ -3580,9 +3589,15 @@ const drawer = (() => {
       const x = all[0];
       if (x.text === S.text) { tell('That text is in the machine already.'); return; }
       let sh = sheets.find(y => y.text === x.text);
-      if (!sh) { sh = make(x); sheets.unshift(sh); }
+      const existing = Boolean(sh);
+      if (!sh) sh = make(x);
       const putAway = S.text.trim() !== '';
-      swap(sh.id);
+      const parked = putAway ? { id: uid(), text: S.text, at: S.at, ...(S.title && { title: S.title }) } : null;
+      const nextPile = sheets.filter(item => item !== sh);
+      if (parked) nextPile.unshift(parked);
+      if (!fits(nextPile, sh)) return;
+      if (!existing) sheets.unshift(sh);
+      swap(sh.id, parked);
       tell('Opened' + (sh.title ? ' ' + sh.title : '') + (putAway ? '; the text that was in the machine is in the drawer' : '') + '.' + notes, 5000);
       return;
     }
@@ -3594,13 +3609,14 @@ const drawer = (() => {
       add.push(make(x));
     }
     const had = all.length - add.length;
+    if (add.length && !fits(add.concat(sheets))) return;
     if (!open) set(true);
     if (!add.length) {
       say((all.length === 1 ? 'That text is' : 'Every one of those texts is') + ' here already.' + notes, 6000);
       return;
     }
     letGo();
-    sheets.unshift(...add);
+    sheets = add.concat(sheets);
     save();
     render();
     well.scrollTop = 0;
@@ -4253,40 +4269,8 @@ function pickFiles() {
   pick.addEventListener('change', () => { if (pick.files && pick.files.length) openFiles([...pick.files]); });
   pick.click();
 }
-// Text from the bytes of a file: UTF-8 as a rule, and failing that windows-1250, which older
-// Czech texts are often in. Null for what is not text at all.
-function textOf(buf) {
-  const u = new Uint8Array(buf);
-  let odd = 0;                              // control characters other than tab, new line, form feed and return
-  for (const x of u) {
-    if (x === 0) return null;
-    if (x < 32 && x !== 9 && x !== 10 && x !== 12 && x !== 13) odd++;
-  }
-  if (odd > u.length / 200) return null;
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(u); } catch { /* not UTF-8 */ }
-  return new TextDecoder('windows-1250').decode(u);
-}
 async function openFiles(files) {
-  const items = [], not = [];
-  let backup = false;
-  for (const f of files) {
-    let t = null;
-    if (f.size <= 8e6) try { t = textOf(await f.arrayBuffer()); } catch { /* unreadable */ }
-    if (t === null) { not.push(f.name); continue; }
-    if (/\.json$/i.test(f.name) || f.type === 'application/json') {
-      let d = null;
-      try { d = JSON.parse(t); } catch { /* not a backup */ }
-      if (d && d.typelight === 1 && Array.isArray(d.drawer)) { backup = true; items.push(d.machine, ...d.drawer); }
-      else not.push(f.name);
-      continue;
-    }
-    const base = f.name.replace(/\.[^.]*$/, '').trim();
-    items.push({
-      text: t.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\t/g, '    '),
-      at: f.lastModified || Date.now(),
-      title: /^typelight-\d{4}-\d\d-\d\d/.test(base) ? '' : base,      // (a name the app gave it is no name)
-    });
-  }
+  const { items, backup, not } = await TypelightImport.readFiles(files);
   drawer.bring(items, { machine: !backup && files.length === 1, not });
   ta.focus({ preventScroll: true });
 }

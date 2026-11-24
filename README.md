@@ -30,6 +30,12 @@ asks the previous running version to save and quit, and installs into
 `~/Applications`. See [Desktop setup](DESKTOP.md) for requirements, storage,
 testing, and the remaining release checks.
 
+Desktop recovery is available before the editor opens if the library is damaged
+or missing with automatic backups present. Recovery preserves the original file;
+closing normally also creates a snapshot of the last saved edits. Portable JSON
+backups up to 50 MiB can be imported; malformed backups are rejected without
+partially importing their documents.
+
 ## Run it
 
 Serve the folder over http and open it in a browser:

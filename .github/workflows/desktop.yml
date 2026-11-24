@@ -2,42 +2,45 @@ name: Desktop builds
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Desktop platform to test and package
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - mac
+          - win
+          - linux
   push:
-    paths:
-      - 'index.html'
-      - 'desktop/**'
-      - 'editor/**'
-      - 'fonts/**'
-      - 'icons/**'
-      - 'sounds/**'
-      - 'textures/**'
-      - 'tests/**'
-      - 'package*.json'
-      - 'electron-builder.yml'
-      - '.github/workflows/desktop.yml'
-  pull_request:
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
 
 jobs:
+  select-platforms:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Select desktop platforms
+        id: platforms
+        run: node tools/desktop-matrix.cjs
+        env:
+          TYPELIGHT_BUILD_EVENT: ${{ github.event_name }}
+          TYPELIGHT_BUILD_PLATFORM: ${{ inputs.platform }}
   build:
+    needs: select-platforms
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: mac
-            arch: arm64
-          - os: macos-15-intel
-            target: mac
-            arch: x64
-          - os: windows-latest
-            target: win
-            arch: x64
-          - os: ubuntu-latest
-            target: linux
-            arch: x64
+      matrix: ${{ fromJSON(needs.select-platforms.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

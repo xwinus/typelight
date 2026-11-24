@@ -59,11 +59,20 @@ installs locked dependencies and builds for the current host. It also accepts
 `--arch universal` is available for macOS. The script copies a completed Mac
 bundle to `build/Typelight.app` for the local installer.
 
-Cross-compilation is not the release verification strategy. The GitHub Actions
-workflow builds Apple Silicon and Intel Mac artifacts, a Windows x64 installer,
-and Linux x64 packages on their corresponding hosts. It uploads workflow
-artifacts only; it does not publish a release. Runtime checks on each target
-remain required even after packaging succeeds.
+Cross-compilation is not the release verification strategy. GitHub Actions has
+two separate workflows:
+
+- **Unit tests** runs `npm test` on Linux for every branch push and pull request.
+  It skips downloading the Electron binary and does not build installers.
+- **Desktop builds** runs unit tests, Electron runtime tests, and packaging on
+  the selected operating systems. Start it manually from Actions with `all`,
+  `mac`, `win`, or `linux`. Mac includes Apple Silicon and Intel. Pushing a tag
+  starting with `v` (for example `v0.1.0`) always runs every desktop target.
+
+Desktop builds upload DMG/ZIP, Windows x64 NSIS, and Linux x64 AppImage/DEB files
+as workflow artifacts only; they do not publish a release. Ordinary branch pushes
+and pull requests do not trigger desktop builds, and no nightly build is scheduled.
+Installation and manual runtime checks remain required even after packaging succeeds.
 
 ## Install
 
@@ -117,13 +126,31 @@ Updates replace the application, not the document library.
 
 Automatic snapshots live in the neighboring `Backups` directory. The first
 changed save after launch backs up the previous persisted state, then snapshots
-are spaced at least five minutes apart; the newest 30 are retained. The current
-library is more recent than the latest snapshot. Local backups do not protect
-against device loss; keep portable library exports elsewhere as well.
+are spaced at least five minutes apart; the newest 30 are retained. A normal
+window close also backs up the latest persisted state after pending edits have
+finished saving. An unchanged final snapshot is not duplicated. If that backup
+fails, the window stays open and unlocked for export or retry. During an open
+session, the current library may be more recent than the latest snapshot;
+the five-minute spacing is not a guaranteed maximum recovery gap. Local backups
+do not protect against device loss; keep portable library exports elsewhere too.
 
-The library limit is 50 MiB. Text imports are limited to 8 MB per file. Invalid
-or unsupported primary data must stop loading rather than silently replace the
-only copy. Keep the original file when recovering a damaged library.
+The library and JSON backup import limits are 50 MiB. Text imports are limited
+to 8 MB per file. Portable backups require valid UTF-8 and a complete, valid
+document list; a malformed backup is rejected as a whole.
+Before merging imports or snapshot texts, the desktop editor checks the complete
+resulting library size, including discarded documents and preferences. Imports
+that would exceed the storage limit leave the current library unchanged.
+
+If the primary library is damaged, startup offers a snapshot picker before
+opening the editor. A missing primary with existing automatic snapshots also
+offers recovery instead of silently opening an empty library. The selected
+snapshot is validated before confirmation. Recovery keeps the original bytes
+in `Recovered Originals`, outside automatic snapshot rotation, then atomically
+installs the recovered library. Canceling leaves the files untouched. A library
+changed externally during recovery is not overwritten. Inaccessible or
+nonregular library paths must be resolved through the library folder first.
+The File menu's recovery action continues to merge snapshot texts into an
+already open library rather than replacing it.
 
 For isolated testing, set `TYPELIGHT_DATA_DIR` to a temporary directory. Never
 point it at unrelated files. The shared web `#demo` mode disables persistence;
@@ -137,11 +164,15 @@ npm run test:desktop
 ```
 
 Unit tests cover the shared desktop bridge and the Electron modules. The
-desktop smoke test launches the real Electron runtime with temporary data.
+desktop smoke and recovery tests launch the real Electron runtime with temporary data.
 Use `xvfb-run -a npm run test:desktop` on a headless Linux host. Each new
 functionality requires expected, edge, and error cases. Changes to persistence
 must also preserve cancellation, interrupted writes, malformed data, and the
 previous valid library. Tests use temporary data, not personal documents.
+Storage regression tests forcibly terminate a child process during partial
+writing, before replacement, and immediately after replacement, then verify
+the primary library and previous snapshot. These process-crash checks do not
+simulate power loss or failure of the underlying storage device.
 
 The macOS installer regression suite uses signed temporary fixture applications:
 
@@ -170,7 +201,12 @@ including button bounds and overlapping controls. All
 a running AudioContext. Physical speaker output and audible quality still
 need a listening pass.
 
-The latest unit suite passes 105 tests. Selection checks cover mouse dragging,
+The latest unit suite passes 153 tests. The separate Electron recovery scenario
+verified damaged-library startup, preservation of the original, further editing,
+failed close backups leaving the editor unlocked, successful retry, and the final
+snapshot containing the latest text. Import tests cover backups larger than 8 MB,
+strict validation, capacity checks before mutation, and document-ID collisions.
+Selection checks cover mouse dragging,
 double-click, keyboard and native-menu selection, plain-text copy/cut, replacement,
 multi-page ranges, and restoring backward selections through undo. Unit tests
 also verify grapheme boundaries and preservation of text after clipboard errors.

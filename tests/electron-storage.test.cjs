@@ -209,3 +209,144 @@ test('a file appearing after initial load is preserved', t => {
   assert.throws(() => store.replace({ 'typelight.text': 'Stale' }), /changed outside/);
   assert.equal(new LibraryStore(store.directory).values['typelight.text'], 'External');
 });
+
+test('a closing checkpoint backs up the latest saved text including the first document', t => {
+  const store = new LibraryStore(fixture(t));
+  store.replace({ 'typelight.text': 'The completed session 🐎' });
+  const primary = read(store.filePath);
+  assert.equal(store.checkpoint(), true);
+  const names = fs.readdirSync(store.backupsDirectory);
+  assert.equal(names.length, 1);
+  assert.equal(read(path.join(store.backupsDirectory, names[0])), primary);
+  assert.equal(read(store.filePath), primary);
+});
+
+test('checkpoints skip absent data and avoid duplicate snapshots across reopening', t => {
+  const store = new LibraryStore(fixture(t));
+  assert.equal(store.checkpoint(), false);
+  assert.equal(fs.existsSync(store.backupsDirectory), false);
+  store.replace({ 'typelight.text': '' });
+  assert.equal(store.checkpoint(), true);
+  const names = fs.readdirSync(store.backupsDirectory);
+  assert.equal(store.checkpoint(), false);
+  assert.equal(new LibraryStore(store.directory).checkpoint(), false);
+  assert.deepEqual(fs.readdirSync(store.backupsDirectory), names);
+});
+
+test('a checkpoint failure leaves the primary intact and a later retry completes the backup', t => {
+  const store = new LibraryStore(fixture(t));
+  store.replace({ 'typelight.text': 'Keep the final edit' });
+  const primary = read(store.filePath);
+  const rename = t.mock.method(fs, 'renameSync', () => {
+    throw Object.assign(new Error('Disk full'), { code: 'ENOSPC' });
+  });
+  assert.throws(() => store.checkpoint(), /Disk full/);
+  assert.equal(read(store.filePath), primary);
+  assert.deepEqual(fs.readdirSync(store.backupsDirectory), []);
+  rename.mock.restore();
+  assert.equal(store.checkpoint(), true);
+  assert.equal(fs.readdirSync(store.backupsDirectory).length, 1);
+});
+
+test('checkpoints detect changed or missing primary data even when already backed up', t => {
+  const store = new LibraryStore(fixture(t));
+  store.replace({ 'typelight.text': 'Original' });
+  store.checkpoint();
+  const names = fs.readdirSync(store.backupsDirectory);
+  fs.writeFileSync(store.filePath, snapshot({ 'typelight.text': 'Changed externally' }));
+  assert.throws(() => store.checkpoint(), /changed outside/);
+  assert.equal(new LibraryStore(store.directory).values['typelight.text'], 'Changed externally');
+  fs.unlinkSync(store.filePath);
+  assert.throws(() => store.checkpoint(), /changed outside/);
+  assert.deepEqual(fs.readdirSync(store.backupsDirectory), names);
+});
+
+test('checkpoint retention keeps the latest completed session after a clock rollback', t => {
+  let now = 1_700_000_000_000;
+  const store = new LibraryStore(fixture(t), { clock: () => now++ });
+  for (let i = 0; i < 35; i++) {
+    store.replace({ 'typelight.text': String(i) });
+    store.checkpoint();
+  }
+  now -= 60_000;
+  store.replace({ 'typelight.text': 'Final after clock rollback' });
+  store.checkpoint();
+  const names = fs.readdirSync(store.backupsDirectory)
+    .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
+  assert.equal(names.length, 30);
+  assert.equal(LibraryStore.decodeSnapshot(read(path.join(store.backupsDirectory, names[0])))['typelight.text'],
+    'Final after clock rollback');
+  assert.equal(new LibraryStore(store.directory).checkpoint(), false);
+});
+
+test('a checkpoint cannot report completion when backup retention fails', t => {
+  let now = 1_700_000_000_000;
+  const store = new LibraryStore(fixture(t), { clock: () => now++ });
+  for (let i = 0; i < 30; i++) {
+    store.replace({ 'typelight.text': String(i) });
+    store.checkpoint();
+  }
+  store.replace({ 'typelight.text': 'Final' });
+  const unlink = fs.unlinkSync;
+  const failure = t.mock.method(fs, 'unlinkSync', file => {
+    if (path.basename(file).startsWith('library-')) throw new Error('Backup retention unavailable');
+    return unlink(file);
+  });
+  assert.throws(() => store.checkpoint(), /Backup retention unavailable/);
+  assert.equal(new LibraryStore(store.directory).values['typelight.text'], 'Final');
+  failure.mock.restore();
+  assert.equal(store.checkpoint(), false);
+  assert.equal(fs.readdirSync(store.backupsDirectory).length, 30);
+});
+
+test('valid drawer metadata and discarded document positions survive save and reload', t => {
+  const store = new LibraryStore(fixture(t));
+  const drawer = { v: 1, pile: [{ id: 'draft', text: 'A story', title: 'Příběh', at: 0 }],
+    bin: [{ id: 'discarded', text: 'Earlier', title: '', at: 1700000000000, gone: 1700000001000,
+      side: 'left', fx: 0.5, fy: 0, spin: { ax: -1, ay: 0, angle: 4.25 } }] };
+  store.replace({ 'typelight.drawer': JSON.stringify(drawer) });
+  assert.deepEqual(JSON.parse(new LibraryStore(store.directory).values['typelight.drawer']), drawer);
+});
+
+test('legacy drawer documents may omit optional metadata and retain an empty unique identifier', t => {
+  const values = { 'typelight.drawer': JSON.stringify({ v: 1,
+    pile: [{ id: '', text: '' }], bin: [{ id: 'old-bin', text: 'Earlier' }] }) };
+  const store = new LibraryStore(fixture(t));
+  store.replace(values);
+  assert.deepEqual(new LibraryStore(store.directory).values, values);
+});
+
+test('invalid drawer metadata is rejected during loading and saving without overwriting documents', t => {
+  const store = new LibraryStore(fixture(t));
+  store.replace({ 'typelight.text': 'Keep the current writing' });
+  const original = read(store.filePath);
+  for (const metadata of [{ title: {} }, { title: null }, { at: '123' }, { at: -1 }, { at: null },
+    { gone: 'yesterday' }, { gone: -1 }, { fx: null }, { fy: '0.5' }, { side: 'elsewhere' },
+    { spin: [] }, { spin: { ax: 0, ay: 1 } }, { spin: { ax: null, ay: 1, angle: 4 } }]) {
+    const values = { 'typelight.drawer': JSON.stringify({ v: 1, pile: [],
+      bin: [{ id: 'broken', text: 'Preserve me', ...metadata }] }) };
+    assert.throws(() => LibraryStore.decodeSnapshot(snapshot(values)), /invalid drawer document metadata/);
+    assert.throws(() => store.replace(values), /invalid drawer document metadata/);
+    assert.equal(read(store.filePath), original);
+  }
+  const corruptFile = path.join(fixture(t), 'library.json');
+  const corrupt = snapshot({ 'typelight.drawer': JSON.stringify({ v: 1,
+    pile: [{ id: 'title-object', text: 'Keep this text', title: {} }], bin: [] }) });
+  fs.writeFileSync(corruptFile, corrupt);
+  assert.throws(() => new LibraryStore(path.dirname(corruptFile)), /invalid drawer document metadata/);
+  assert.equal(read(corruptFile), corrupt);
+});
+
+test('duplicate document identifiers within or across the drawer and bin are rejected', t => {
+  const store = new LibraryStore(fixture(t));
+  store.replace({ 'typelight.text': 'Current writing' });
+  const original = read(store.filePath);
+  const first = { id: 'same', text: 'First' }, second = { id: 'same', text: 'Second' };
+  for (const drawer of [{ v: 1, pile: [first, second], bin: [] },
+    { v: 1, pile: [first], bin: [second] }, { v: 1, pile: [], bin: [first, second] }]) {
+    const values = { 'typelight.drawer': JSON.stringify(drawer) };
+    assert.throws(() => LibraryStore.decodeSnapshot(snapshot(values)), /duplicate drawer document identifiers/);
+    assert.throws(() => store.replace(values), /duplicate drawer document identifiers/);
+    assert.equal(read(store.filePath), original);
+  }
+});
