@@ -16,6 +16,13 @@ search, undo and redo, text import and export, JSON backup and import, printing,
 browser autosave, storage failure warnings, and cross-tab coordination. It also
 has a service worker and installation manifest for offline web use.
 
+Each text now retains its caret, selection, and reading position across switches
+and restarts. Separate, bounded undo histories survive document switching within
+the session and reset on reopening. Help includes current-text naming (also F2
+while writing) and persistent volume/mute controls. Desktop naming is also in
+the File menu with Cmd/Ctrl+Shift+N. Find and Replace (Cmd/Ctrl+Shift+F) changes
+one or all matches in the current text as an undoable action.
+
 The desktop direction is one Electron application for macOS, Windows, and
 Linux, with shared storage, file dialogs, and automatic snapshots. All three
 platforms are required for the MVP; platform-specific visual polish must not
@@ -23,6 +30,9 @@ create separate application implementations. See [DESKTOP.md](DESKTOP.md) for
 builds, storage, and verification limits.
 The checklist below remains the wider commercial release gate; initial desktop
 implementation does not imply all release criteria are met.
+The desktop Version History dialog lists dated automatic snapshots, previews
+individual texts, and restores a selected text as a separate drawer copy without
+replacing the current document or existing copies.
 
 Mouse and keyboard selection, copying, cutting, and replacement are implemented,
 with regression checks for native selection, composition, and undo restoration.
@@ -63,14 +73,17 @@ Required before a paid beta. Local-only storage remains the initial model.
   keep the website and demo deployable as static assets.
 - [ ] Implement desktop document persistence that survives application restarts
   and does not depend on browser site storage.
-- [ ] Provide open, save, and save-as operations for text files, with explicit
-  handling of canceled dialogs, read failures, and write failures.
+- [ ] Verify Open imports a separate library copy and Export Text writes a copy
+  to the chosen location, with explicit handling of canceled dialogs, read
+  failures, and write failures. Editing an imported text must leave its source
+  file unchanged; autosave persists the library.
 - [ ] Protect saved documents from interrupted writes; retain a recoverable
   previous state and test forced termination during saving.
 - [ ] Save automatic backup snapshots outside the primary document store and
   define retention, backup frequency, and the maximum expected recovery gap.
-- [ ] Provide a simple way to browse and restore previous versions without
-  silently overwriting the only copy of the current text.
+- [ ] Verify the implemented dated version-history browser, previews, and
+  single-document restoration as a new copy across supported platforms, including
+  identical texts, empty texts, malformed snapshots, and failed saves.
 - [ ] Test restoring from backup with the primary data unavailable or damaged.
 - [ ] Retain portable library export and import, including a path to move
   existing browser documents into the desktop application.
@@ -110,7 +123,10 @@ macOS, Windows, and Linux are required. Build and test on each target system.
   update preserves documents. Automatic updating may follow if a clear manual
   update path is adequate for the beta.
 - [ ] Test realistic long documents and a populated drawer; record fixtures,
-  supported scale, and any visible performance limits.
+  supported scale, and any visible performance limits. The development Mac
+  benchmark now covers 600,000–2,000,000-character texts, 200–500 drawer documents,
+  and 30 snapshots; see DESKTOP.md. Verify other target systems and lower-memory
+  machines before treating that measured workload as a supported product limit.
 - [ ] Verify keyboard operation, reduced motion, sound controls, and the
   fallback without WebGL.
 - [ ] Verify VoiceOver and NVDA on target systems. Keyboard navigation, modal

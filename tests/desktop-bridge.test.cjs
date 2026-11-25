@@ -5,7 +5,8 @@ const vm = require('node:vm');
 
 const source = readFileSync('desktop/web/bridge.js', 'utf8');
 
-function harness(t, { seed = {}, send = async () => true, electron = false, importFiles } = {}) {
+function harness(t, { seed = {}, send = async () => true, electron = false, importFiles, restoreCopy,
+  saveChanges = false, encoder = TextEncoder } = {}) {
   const calls = [], notices = [], imported = [], locks = [], timers = new Set();
   const context = {
     window: { __typelightSeed: seed, webkit: { messageHandlers: { typelight: {
@@ -13,7 +14,7 @@ function harness(t, { seed = {}, send = async () => true, electron = false, impo
     } } } },
     document: { getElementById: () => null, documentElement: {} },
     MutationObserver: class { observe() {} },
-    File, Uint8Array, atob, TextEncoder,
+    File, Uint8Array, atob, TextEncoder: encoder,
     setTimeout(fn, ms) {
       const timer = setTimeout(() => { timers.delete(timer); fn(); }, ms);
       timers.add(timer);
@@ -22,7 +23,7 @@ function harness(t, { seed = {}, send = async () => true, electron = false, impo
     clearTimeout(timer) { timers.delete(timer); clearTimeout(timer); },
   };
   if (electron) {
-    context.window.typelightHost = { seed, postMessage: context.window.webkit.messageHandlers.typelight.postMessage };
+    context.window.typelightHost = { seed, saveChanges, postMessage: context.window.webkit.messageHandlers.typelight.postMessage };
     delete context.window.webkit;
     delete context.window.__typelightSeed;
   }
@@ -30,7 +31,7 @@ function harness(t, { seed = {}, send = async () => true, electron = false, impo
   vm.runInNewContext(source, context);
   const bridge = context.window.typelightDesktop;
   bridge.attach({ persist() {}, command() {}, notice: text => notices.push(text),
-    lock: value => locks.push(value), importFiles: importFiles || (files => imported.push(...files)) });
+    lock: value => locks.push(value), importFiles: importFiles || (files => imported.push(...files)), restoreCopy });
   return { bridge, calls, notices, imported, locks };
 }
 
@@ -238,4 +239,103 @@ test('capacity preflight rejects unsupported values and accounts for pending sta
   }
   bridge.set('typelight.prefs', 'x'.repeat(50 * 1024 * 1024));
   assert.equal(bridge.canStore({ 'typelight.text': 'Small import' }), false);
+});
+
+test('history restoration creates a copy through the editor and waits for persistence before success', async t => {
+  const document = { text: 'Earlier text', title: 'Earlier', at: 1 };
+  const h = harness(t, { send: async message => message.type === 'history-document' ? document : true,
+    restoreCopy(item) {
+      assert.equal(item, document);
+      h.bridge.set('typelight.drawer', JSON.stringify({ v: 1, pile: [{ id: 'copy', ...item }], bin: [] }));
+      return { restored: true };
+    } });
+  const result = await h.bridge.historyRestore('library-1-test.json', 0, 'a'.repeat(64));
+  assert.equal(result.saved, true);
+  assert.ok(h.calls.some(call => call.type === 'save'));
+});
+
+test('a history copy that cannot be saved remains distinguishable from a failed import', async t => {
+  const h = harness(t, { send: async message => {
+    if (message.type === 'save') throw new Error('Disk full');
+    return { text: 'Recover me' };
+  }, restoreCopy() {
+    h.bridge.set('typelight.text', 'Recover me');
+    return { restored: true };
+  } });
+  const result = await h.bridge.historyRestore('library-1-test.json', 0, 'a'.repeat(64));
+  assert.equal(result.restored, true);
+  assert.equal(result.saved, false);
+  assert.match(result.error, /Disk full/);
+  assert.equal(h.bridge.get('typelight.text'), 'Recover me');
+});
+
+test('unavailable or rejected history documents do not claim a successful restoration', async t => {
+  let imports = 0;
+  const h = harness(t, { send: async message => {
+    if (message.type === 'history-document') throw new Error('Snapshot changed');
+    return true;
+  }, restoreCopy() { imports++; return { restored: true }; } });
+  await assert.rejects(h.bridge.historyRestore('library-1-test.json', 0, 'a'.repeat(64)), /Snapshot changed/);
+  assert.equal(imports, 0);
+  const refused = harness(t, { restoreCopy: () => ({ restored: false }) });
+  await assert.rejects(refused.bridge.historyRestore('library-1-test.json', 0, 'a'.repeat(64)), /could not be restored/);
+});
+
+test('incremental hosts receive only changed values while unchanged documents remain available', async t => {
+  const { bridge, calls } = harness(t, { electron: true, saveChanges: true,
+    seed: { 'typelight.text': 'Before', 'typelight.drawer': 'Large unchanged drawer' } });
+  bridge.set('typelight.text', 'After');
+  await bridge.flush();
+  const saves = calls.filter(call => call.type === 'save-changes');
+  assert.deepEqual(Object.keys(saves[0].changes), ['typelight.text']);
+  assert.equal(saves[0].changes['typelight.text'], 'After');
+  assert.equal(bridge.get('typelight.drawer'), 'Large unchanged drawer');
+  await bridge.flush();
+  assert.equal(calls.filter(call => call.type === 'save-changes').length, 1);
+});
+
+test('incremental saves include a reverted edit made while its previous value is being written', async t => {
+  let acknowledge;
+  const { bridge, calls } = harness(t, { electron: true, saveChanges: true, seed: { 'typelight.text': 'Original' },
+    send: message => message.type === 'save-changes' && !acknowledge
+      ? new Promise(resolve => { acknowledge = resolve; }) : Promise.resolve(true) });
+  bridge.set('typelight.text', 'Temporary');
+  const flushed = bridge.flush();
+  await Promise.resolve();
+  bridge.set('typelight.text', 'Original');
+  acknowledge(true);
+  await flushed;
+  assert.deepEqual(calls.filter(call => call.type === 'save-changes').map(call => call.changes['typelight.text']),
+    ['Temporary', 'Original']);
+});
+
+test('failed incremental writes retain every unacknowledged field for retry', async t => {
+  let fail = true;
+  const { bridge, calls } = harness(t, { electron: true, saveChanges: true, send: async message => {
+    if (message.type === 'save-changes' && fail) throw new Error('Disk full');
+    return true;
+  } });
+  bridge.set('typelight.text', 'Keep');
+  bridge.set('typelight.title', 'Draft');
+  await assert.rejects(bridge.flush(), /Disk full/);
+  bridge.set('typelight.title', 'Updated draft');
+  fail = false;
+  await bridge.flush();
+  const retry = calls.filter(call => call.type === 'save-changes').at(-1).changes;
+  assert.equal(retry['typelight.text'], 'Keep');
+  assert.equal(retry['typelight.title'], 'Updated draft');
+});
+
+test('capacity checks reuse unchanged field sizes and invalidate them when pending data changes', t => {
+  const encoded = [];
+  class CountingEncoder extends TextEncoder {
+    encode(value) { encoded.push(value); return super.encode(value); }
+  }
+  const drawer = 'x'.repeat(10000);
+  const { bridge } = harness(t, { seed: { 'typelight.drawer': drawer }, encoder: CountingEncoder });
+  assert.equal(bridge.canStore({ 'typelight.text': 'First' }), true);
+  assert.equal(bridge.canStore({ 'typelight.text': 'Second' }), true);
+  assert.equal(encoded.filter(value => value.includes(drawer)).length, 1);
+  bridge.set('typelight.drawer', 'y'.repeat(50 * 1024 * 1024));
+  assert.equal(bridge.canStore({ 'typelight.text': '' }), false);
 });

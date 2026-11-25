@@ -28,7 +28,7 @@
     };
   }
 
-  function install({ state, save, measure, desktop, demo = false, focusWriting, changed = () => {} }) {
+  function install({ state, save, measure, desktop, demo = false, focusWriting, changed = () => {}, opened = () => {} }) {
     const root = document.documentElement;
     const mac = /Mac|iPhone|iPad/.test(navigator.platform || '');
     const mod = mac ? '⌘' : 'Ctrl';
@@ -99,6 +99,7 @@
     }
     function command(action) {
       if (action === 'help') {
+        opened();
         if (!dialog.open) { returnFocus = document.activeElement; dialog.showModal(); }
         return true;
       }

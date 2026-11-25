@@ -35,6 +35,9 @@ or missing with automatic backups present. Recovery preserves the original file;
 closing normally also creates a snapshot of the last saved edits. Portable JSON
 backups up to 50 MiB can be imported; malformed backups are rejected without
 partially importing their documents.
+The desktop File menu's "Version History…" lists dated automatic snapshots.
+Choose a snapshot and a text to preview it, then restore that text as a separate
+copy in the drawer. The current text and existing copies remain intact.
 
 ## Run it
 
@@ -54,8 +57,10 @@ offer it can install it as an app.
 
 ## How it works
 
-- You type where the head is, which is at the end of the text unless you move
-  it. To correct something further back, click on it, or roll the paper there
+- You type where the head is. Each text remembers its caret, selection, and
+  reading position when you switch texts or reopen the app; a text without a
+  saved position starts at its end. To correct something further back, click on
+  it, or roll the paper there
   and use the arrow keys: the paper is rolled until that line is under the
   head and the carriage goes to the place. What you type goes in there and the
   rest moves along. Left and right move the carriage, up and down the paper,
@@ -109,7 +114,9 @@ offer it can install it as an app.
   WebGL is unavailable or its context is lost.
 - The sounds are recordings of real typewriters. Each strike plays a different
   take, the carriage return is timed to the head's travel, and a bell rings
-  eight columns before the right margin.
+  eight columns before the right margin. Help (F1) has a volume slider for all
+  sounds and a sound checkbox; the Sound tool also mutes or unmutes them.
+  Muting retains the chosen volume. Both settings are remembered outside demo mode.
 - The desk has a drawer for the texts you are not working on. "New text" puts
   the one in the machine away, however many pages it is, and gives you a
   blank sheet; "Drawer" shows the pile, lit by a small lamp under the edge of
@@ -122,16 +129,22 @@ offer it can install it as an app.
   for good. With the keyboard: Tab to the texts, arrows to go between them,
   Alt+arrows to move one, F2 to name it, Delete to throw it away, Enter to
   take it. On a touch screen, hold a text to pick it up.
-- Everything is saved in the browser's local storage as you type, on this
+- Rename the text in the machine from Help's "Rename current text…" button or
+  by pressing F2 while writing. On desktop, File → Rename Current Text… also
+  has Cmd/Ctrl+Shift+N. An empty name makes the text untitled; renaming preserves
+  the text and selection and supplies its suggested export filename.
+- On the web, everything is saved in the browser's local storage as you type, on this
   device only. If the browser will not keep it (its storage is full, or
   switched off for the site), "Not saved in this browser" says so beside the
   word count. "Export text…" (or Cmd/Ctrl+S) downloads the text in the machine
   as a plain text file, all its pages in one, named after the text if it has
-  been given a name.
-- "Open file" (or Cmd/Ctrl+O, or dropping files on the page) opens text files.
+  been given a name. Desktop autosave uses the application's local library.
+  Export saves a copy; it does not establish a link to a file for future edits.
+- "Open file" (or Cmd/Ctrl+O, or dropping files on the page) imports copies of text files.
   One file goes into the machine, and the text that was there is put away in
   the drawer; several go into the drawer, on top of the pile. A text takes its
-  name from the file. Files are read as UTF-8, or else as windows-1250.
+  name from the file. Editing the imported text leaves the original file unchanged.
+  Files are read as UTF-8, or else as windows-1250.
 - With the drawer out, "Back up" downloads every text, the one in the machine
   and those in the drawer, as one JSON file. Opening such a file brings its
   texts back into the drawer. Nothing is replaced: a text that is already
@@ -143,6 +156,11 @@ offer it can install it as an app.
   count: "zivot" finds "Život". If texts in the drawer have the word too, it
   says how many; with the drawer out, those stand out and the rest are in
   shadow. Typing, or Esc, puts the word away.
+- "Replace…" in Find, or Cmd/Ctrl+Shift+F, opens replacement controls. Replace
+  changes the selected occurrence; Replace all changes every occurrence in the
+  current text as one undoable edit. Search is literal and ignores capitals
+  and accents; replacement text is inserted literally. An empty replacement
+  removes matches. Texts in the drawer are never replaced by these actions.
 - With the drawer out, the word count is that of every text, the one in the
   machine and those in the drawer.
 - Pointing at a ball of paper on the floor says what is on it and when it goes
@@ -156,8 +174,10 @@ offer it can install it as an app.
   saving, so as not to write over it, and take up what it saved as soon as
   they are used again.
 - Undo and redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y) go back a run of typing
-  or of rubbing out at a time, up to a new line. Taking another text into the
-  machine starts its undo afresh.
+  or of rubbing out at a time, up to a new line. Each text keeps its own undo
+  history when switching through the drawer during the current session.
+  History is bounded in memory, so older steps may be discarded; it resets
+  when the app or page is reopened and is not included in backups.
 - Each item of the menu has a letter underlined. Alt and that letter works
   the item from the keyboard (on a Mac it is Control, because Option and a
   letter types characters there): P for the pages, D for the drawer, L for

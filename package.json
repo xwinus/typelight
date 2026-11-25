@@ -14,7 +14,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
-    "test:desktop": "electron tests/electron-smoke.cjs && electron tests/recovery-runtime.cjs",
+    "test:desktop": "electron tests/electron-smoke.cjs && electron tests/recovery-runtime.cjs && electron tests/writing-runtime.cjs",
+    "test:performance": "node tools/benchmark.cjs",
     "build:mac": "electron-builder --mac --publish never",
     "build:win": "electron-builder --win --x64 --publish never",
     "build:linux": "electron-builder --linux --x64 --publish never",

@@ -1,0 +1,17 @@
+.writing-volume {
+  display: grid; grid-template-columns: auto minmax(80px, 1fr) 45px;
+  align-items: center; gap: 12px; margin-top: 10px;
+}
+.writing-volume input[type="range"] { width: 100%; height: 28px; margin: 0; }
+.writing-volume output { text-align: right; font-variant-numeric: tabular-nums; }
+.current-text-name { overflow-wrap: anywhere; }
+.rename-text-dialog { width: min(440px, calc(100vw - 32px)); }
+.rename-text-dialog label { margin-top: 16px; }
+.rename-text-dialog input[type="text"] {
+  width: 100%; height: auto; min-height: 42px; box-sizing: border-box; padding: 9px 12px;
+  border: 1px solid #8b795e; border-radius: 8px; background: #171411; color: #f1e7d6;
+  font: inherit;
+}
+.rename-text-dialog input[aria-invalid="true"] { border-color: #eda98c; }
+.rename-text-dialog #renameTextError { color: #ffc9ad; }
+.rename-text-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 20px; }

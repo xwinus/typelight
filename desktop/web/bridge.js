@@ -5,12 +5,15 @@
   const host = window.typelightHost || window.webkit?.messageHandlers?.typelight;
   if (!host) return;
   const allowed = new Set(['typelight.text', 'typelight.title', 'typelight.edited',
-    'typelight.drawer', 'typelight.prefs']);
-  const values = { ...(host.seed || window.__typelightSeed) };
+    'typelight.drawer', 'typelight.prefs', 'typelight.document']);
+  const values = { ...(host.takeSeed ? host.takeSeed() : host.seed || window.__typelightSeed) };
+  let acknowledged = { ...values };
   delete window.__typelightSeed;
   let editor = null, revision = 0, written = 0, pending = null, timer = null;
   let error = '', dirty = false, stateTimer = null;
   const imports = new Set();
+  const fieldSizes = new Map(), encoder = new TextEncoder();
+  const envelopeBytes = encoder.encode('{"version":1,"values":{}}').byteLength;
 
   const request = message => Promise.resolve().then(() => host.postMessage(message));
 
@@ -18,8 +21,18 @@
     if (!replacement || typeof replacement !== 'object' || Array.isArray(replacement)) return false;
     try {
       if (Object.entries(replacement).some(([key, value]) => !allowed.has(key) || typeof value !== 'string')) return false;
-      const snapshot = { version: 1, values: { ...values, ...replacement } };
-      return new TextEncoder().encode(JSON.stringify(snapshot)).byteLength <= 50 * 1024 * 1024;
+      const entries = Object.entries({ ...values, ...replacement });
+      let bytes = envelopeBytes + Math.max(0, entries.length - 1);
+      for (const [key, value] of entries) {
+        let cached = fieldSizes.get(key);
+        if (!cached || cached.value !== value) {
+          cached = { value, bytes: encoder.encode(JSON.stringify(key) + ':' + JSON.stringify(value)).byteLength };
+          if (values[key] === value) fieldSizes.set(key, cached);
+        }
+        bytes += cached.bytes;
+        if (bytes > 50 * 1024 * 1024) return false;
+      }
+      return true;
     } catch { return false; }
   }
 
@@ -58,10 +71,13 @@
     }
     if (written === revision) { dirty = false; report(); return true; }
     const saving = revision;
-    pending = request({ type: 'save', values: { ...values } });
+    const snapshot = { ...values };
+    const changes = Object.fromEntries(Object.entries(snapshot).filter(([key, value]) => acknowledged[key] !== value));
+    pending = request(host.saveChanges === true ? { type: 'save-changes', changes } : { type: 'save', values: snapshot });
     report();
     try {
       await pending;
+      acknowledged = snapshot;
       written = saving;
       dirty = written !== revision;
       error = '';
@@ -80,6 +96,7 @@
     if (!allowed.has(key) || typeof value !== 'string') return false;
     if (values[key] !== value) {
       values[key] = value;
+      if (fieldSizes.get(key)?.value !== value) fieldSizes.delete(key);
       revision++;
       dirty = true;
       clearTimeout(timer);
@@ -140,6 +157,17 @@
     openFiles,
     importFiles: files => trackImport(() => editor?.importFiles(files)),
     recover: backup => editor?.recover(backup),
+    historyList: () => request({ type: 'history-list' }),
+    historyContents: id => request({ type: 'history-contents', id }),
+    historyDocument: (id, index, revision) => request({ type: 'history-document', id, index, revision }),
+    historyRestore: (id, index, revision) => trackImport(async () => {
+      if (!editor?.restoreCopy) throw new Error('The editor is not ready to restore a copy.');
+      const document = await request({ type: 'history-document', id, index, revision });
+      const result = await editor.restoreCopy(document);
+      if (!result?.restored) throw new Error('The copy could not be restored. Your existing texts have not been replaced.');
+      try { editor.persist(); await write(); return { restored: true, saved: true }; }
+      catch (failure) { return { restored: true, saved: false, error: failure?.message || String(failure) }; }
+    }),
     download,
     zoom: factor => request({ type: 'zoom', factor }),
     command: action => editor?.command(action),

@@ -16,6 +16,38 @@ function fixture(t) {
 function snapshot(values) { return JSON.stringify({ version: 1, values }); }
 function read(file) { return fs.readFileSync(file, 'utf8'); }
 
+test('active and parked document positions survive disk persistence unchanged', t => {
+  const store = new LibraryStore(fixture(t));
+  const position = { anchor: 8, caret: 2, view: 0 };
+  const values = { 'typelight.text': 'Some writing',
+    'typelight.document': JSON.stringify({ id: 'active', ...position }),
+    'typelight.drawer': JSON.stringify({ v: 1, pile: [
+      { id: 'parked', text: 'Other writing', position },
+    ], bin: [] }) };
+  store.replace(values);
+  assert.deepEqual(new LibraryStore(store.directory).values, values);
+});
+
+test('empty documents and positions beyond a shortened text remain safely readable', () => {
+  const values = { 'typelight.text': '',
+    'typelight.document': JSON.stringify({ id: 'empty', anchor: 0, caret: 0, view: 50 }) };
+  assert.deepEqual(LibraryStore.decodeSnapshot(snapshot(values)), values);
+});
+
+test('invalid active and drawer positions cannot replace the last saved library', t => {
+  const store = new LibraryStore(fixture(t));
+  store.replace({ 'typelight.text': 'Keep this writing' });
+  const original = read(store.filePath);
+  for (const position of [null, {}, { anchor: -1, caret: 0, view: 0 },
+    { anchor: 0, caret: 1.5, view: 0 }, { anchor: 0, caret: 0, view: '2' }]) {
+    assert.throws(() => store.replace({ 'typelight.document': JSON.stringify({ id: 'active', ...position }) }),
+      /invalid document position/);
+    assert.throws(() => store.replace({ 'typelight.drawer': JSON.stringify({ v: 1,
+      pile: [{ id: 'parked', text: 'Keep this too', position }], bin: [] }) }), /invalid drawer document metadata/);
+    assert.equal(read(store.filePath), original);
+  }
+});
+
 test('loads the existing Swift snapshot format without rewriting or losing Unicode', t => {
   const directory = fixture(t);
   const values = { 'typelight.text': 'Příliš žluťoučký kůň 🐎', 'typelight.title': 'Evening',

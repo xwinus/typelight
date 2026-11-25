@@ -31,6 +31,32 @@ Text work from the drawer as well as the editor. Library backup belongs to the
 drawer header and the File menu, never in place of Export Text. Tests enforce
 both position stability and the absence of empty icon slots.
 
+## Writing controls
+
+Each document retains its caret, selection direction, and reading position when
+switching texts and after reopening. Undo and redo are separate for each text
+and survive switching during the current session. They remain in memory only:
+up to 32 recent documents, 500 steps per stack, and a shared character budget
+bound retained history. Reopening starts fresh undo histories; automatic
+snapshots and portable backups do not contain them.
+
+Help (F1) includes Rename current text and a 0–100% volume slider for the keys,
+carriage, bell, paper, and drawer. F2 while writing or File → Rename Current
+Text… (Cmd/Ctrl+Shift+N) opens the same naming dialog. Leaving the name empty
+makes the text untitled; the name is used for suggested export filenames.
+The sound checkbox and Sound tool mute without losing the chosen volume.
+Sound and volume preferences survive reopening.
+
+Find → Replace… or Cmd/Ctrl+Shift+F opens literal, case- and accent-insensitive
+replacement in the current document. Replace changes the selected match;
+Replace all changes all matches as one undoable edit. An empty replacement
+deletes matches. Drawer texts remain unchanged. The Edit menu also exposes
+Find and Replace….
+
+Open imports a copy into the library; later edits do not change the source
+file. Export Text writes a separate copy to the chosen location. Autosave
+continues to save the library rather than overwriting an opened or exported file.
+
 ## Develop and build
 
 Install Node.js 22 or newer with npm. From the repository root:
@@ -140,6 +166,17 @@ session, the current library may be more recent than the latest snapshot;
 the five-minute spacing is not a guaranteed maximum recovery gap. Local backups
 do not protect against device loss; keep portable library exports elsewhere too.
 
+File → Version History… lists automatic snapshots by date. Select a snapshot,
+then a text from its writing desk, drawer, or discarded texts to preview it.
+Restore as a new copy adds that single text to the drawer with a new identity
+and a "(restored copy)" title suffix, even if identical text already exists.
+Existing texts and the document currently in the machine are preserved.
+Large previews are shortened on screen; restoration uses the complete text.
+Malformed snapshots cannot be restored, and a snapshot changed since preview
+must be reselected. A copy is reported as saved only after its library write
+finishes. If that write fails, the copy remains in memory and the dialog reports
+the failure so it can be exported without restoring a duplicate.
+
 The library and JSON backup import limits are 50 MiB. Text imports are limited
 to 8 MB per file. Portable backups require valid UTF-8 and a complete, valid
 document list; a malformed backup is rejected as a whole.
@@ -155,8 +192,8 @@ in `Recovered Originals`, outside automatic snapshot rotation, then atomically
 installs the recovered library. Canceling leaves the files untouched. A library
 changed externally during recovery is not overwritten. Inaccessible or
 nonregular library paths must be resolved through the library folder first.
-The File menu's recovery action continues to merge snapshot texts into an
-already open library rather than replacing it.
+The File menu's separate Recover from Snapshot… action continues to merge
+snapshot texts into an already open library rather than replacing it.
 
 For isolated testing, set `TYPELIGHT_DATA_DIR` to a temporary directory. Never
 point it at unrelated files. The shared web `#demo` mode disables persistence;
@@ -207,7 +244,7 @@ including button bounds and overlapping controls. All
 a running AudioContext. Physical speaker output and audible quality still
 need a listening pass.
 
-The latest unit suite passes 153 tests. The separate Electron recovery scenario
+The separate Electron recovery scenario
 verified damaged-library startup, preservation of the original, further editing,
 failed close backups leaving the editor unlocked, successful retry, and the final
 snapshot containing the latest text. Import tests cover backups larger than 8 MB,
@@ -249,6 +286,152 @@ packaging tools, then failed because the downloaded Mac helper binaries were
 Intel-only and could not execute here (macOS error -86). Their target-host CI
 builds remain the intended verification path. Windows and Linux runtime tests
 have not yet been run; this is not a verified public release for those systems.
+
+## Performance checks
+
+Run `npm run test:performance` locally when preparing a release. To select a
+case, use `npm run test:performance -- novel` (or `small`, `stress`, `paragraph`).
+This command is deliberately separate from `npm test`, `test:desktop`, and CI.
+It requires the existing Electron development dependency, adds no dependencies,
+and uses a fresh temporary library and Electron profile for each case. No
+personal documents are read. Temporary libraries are removed after each run.
+Raw timings, process memory samples, renderer heap measurements, fixture sizes,
+and machine information are written under `build/performance/<timestamp>/`.
+Set `TYPELIGHT_PERF_PROFILE=1` to record renderer CPU profiles during input and
+switching, plus the duration of individual main-process storage writes.
+
+The deterministic fixtures in `tests/performance-fixtures.cjs` contain Czech
+accents, emoji, and English paragraphs. Each library starts with 30 full automatic
+snapshots. Character counts below are UTF-16 code units; drawer counts exclude
+the active document.
+
+| Case | Active text | Drawer | Stored library |
+| --- | ---: | ---: | ---: |
+| small | 10,000 characters | 10 × 2,000 characters | 0.03 MiB |
+| novel | 600,000 characters | 200 × 20,000 characters | 4.57 MiB |
+| stress | 2,000,000 characters | 500 × 40,000 characters | 21.84 MiB |
+| paragraph | 600,000 characters in one paragraph | 200 × 20,000 characters | 4.57 MiB |
+
+The harness sends real Electron key events at the start, middle, and end (12
+characters per position). It measures Electron `insertText` separately (three
+commits per position), checks grouped undo, switches documents 30 times, replaces
+all matches three times and undoes each replacement, opens snapshot history,
+previews and restores a separate copy, saves, and closes with a final checkpoint.
+Assertions compare every original document and title with the final on-disk
+library, verify the exact inserted/replaced text, and reject renderer errors.
+
+Action timings include dispatch from the main process and two animation frames
+after completion. They indicate responsiveness, not physical keyboard-to-display
+latency or completion of decorative animations. Startup ends after fonts and two
+frames; it is not a cold-machine startup benchmark. WebGL and audio remain enabled
+with volume zero, at 1180 × 820 and normal zoom. Background frame throttling is
+disabled so a hidden test window does not distort the result.
+
+### Development Mac baseline, 2026-11-25
+
+Apple M1 Pro, 32 GiB RAM, arm64, Darwin 27.2.0, Electron 45.4.1 / Chromium
+156.0.8078.100. All four cases passed their integrity checks. Values below are
+milliseconds: medians except startup, history, save, and close, which each have
+one sample. The raw report also retains every sample and nearest-rank p95; the
+small sample counts do not establish a statistically robust latency guarantee.
+
+| Operation | small | novel | stress | paragraph |
+| --- | ---: | ---: | ---: | ---: |
+| Startup | 368 | 869 | 1,443 | 777 |
+| Key input, start / middle / end | 19 / 18 / 17 | 25 / 25 / 25 | 36 / 42 / 42 | 67 / 59 / 58 |
+| Largest individual key-input sample | 53 | 87 | 138 | 120 |
+| Switch document | 33 | 172 | 515 | 167 |
+| Find | 37 | 138 | 415 | 170 |
+| Replace all | 63 | 289 | 1,097 | 277 |
+| Open history with initial preview | 33 | 164 | 401 | 190 |
+| Preview another saved document | 15 | 46 | 156 | 45 |
+| Restore and save a copy | 41 | 264 | 856 | 251 |
+| Save library | 23 | 54 | 236 | 56 |
+| Close and checkpoint | 15 | 43 | 96 | 40 |
+| Electron insertText at the end | 17 | 142 | 1,208 | 54 |
+
+The `insertText` path is substantially slower near the end of long multiline
+documents than key events. A renderer CPU profile places most of that delay
+outside the sampled application JavaScript. This is an observed automation/API
+path, not evidence that normal typing takes 1.2 seconds per character. Real
+dead-key and IME input still need hands-on testing before drawing conclusions
+about those input methods. Disabling textarea wrapping did not improve that path;
+no speculative editor change was made.
+
+| Memory observation | small | novel | stress | paragraph |
+| --- | ---: | ---: | ---: | ---: |
+| Peak sampled process working-set sum, MiB | 807 | 1,434 | 2,844 | 1,532 |
+| Renderer JS heap after initial load, MiB | 1.42 | 17.00 | 79.02 | 16.93 |
+| Renderer JS heap after repeat cycle 1, MiB | 1.84 | 39.98 | 193.35 | 39.91 |
+| Renderer JS heap after repeat cycle 2, MiB | 1.88 | 40.03 | 193.38 | 39.96 |
+
+Working sets are sampled every 500 ms across the application's processes,
+including GPU and utility processes. Their sum can count shared pages more than
+once, misses shorter peaks, and is affected by macOS memory compression; it is
+not an exact unique-RAM footprint. JS heap is measured through the debugger after
+explicit garbage collection between stages, never during timed actions. It
+excludes other native, graphics, and audio allocations. The two repeat cycles
+each switch and edit/undo the same five documents. Their stable retained heap
+does not establish leak freedom during hours of use.
+
+The novel case provides a useful provisional beta workload on this machine.
+The stress case preserves data, but half-second switches, one-second replacement,
+and high transient memory are visible limitations. A single huge paragraph also
+costs more per keystroke than ordinary paragraphs. Do not advertise the 50 MiB
+storage ceiling as a smooth-editing capacity guarantee. Further candidates are
+reducing drawer rebuilding and making long search/replacement work less blocking.
+The bounded optimization pass below addresses redundant storage work and copies.
+Lower-memory machines,
+Windows, Linux, and real IME input remain unmeasured.
+
+### Bounded storage and drawer optimization
+
+Desktop saves now send only changed fields over IPC, retaining unacknowledged
+changes until the disk write succeeds. Legacy hosts still receive complete
+snapshots. The main process merges changes, validates changed values, and reuses
+encoded fields from the last successful save. Encoding caches share the current
+snapshot buffer rather than retaining older full buffers. The on-disk version-one
+format, 50 MiB limit, complete-file conflict check, atomic replacement, fsync,
+automatic backups, and close checkpoints are unchanged. Even no-op saves still
+check for external file changes.
+
+The renderer releases its initial preload seed after hydration and caches the
+encoded size of unchanged fields for capacity checks. The drawer uses an ID map,
+reuses date formatters, avoids recalculating newly rendered labels, and keeps its
+canvas backing storage when its dimensions have not changed. Full DOM rebuilding
+is retained because drag, keyboard focus, and accessibility depend on its ordering.
+
+Regression coverage includes concurrent edits and reversions during a pending
+save, failed-save retries, malformed patches, external changes, removed fields,
+exact escaped UTF-8 size limits, one-time hydration, drawer labels, and resizing.
+No migration or new dependency is required. This pass does not alter the slow
+Electron insertText path or the ordinary input handling.
+
+The same four cases passed again on the same Mac. Comparison with the baseline
+above (before → after, milliseconds unless stated otherwise):
+
+| Observation | small | novel | stress | paragraph |
+| --- | ---: | ---: | ---: | ---: |
+| Switch document, median | 33 → 26 | 172 → 163 | 515 → 471 | 167 → 149 |
+| Replace all, median | 63 → 43 | 289 → 269 | 1,097 → 905 | 277 → 261 |
+| Key input at end, median | 17 → 17 | 25 → 25 | 42 → 42 | 58 → 53 |
+| Save library, single sample | 23 → 32 | 54 → 84 | 236 → 99 | 56 → 58 |
+| JS heap after repeat cycle 2, MiB | 1.88 → 1.85 | 40.03 → 32.31 | 193.38 → 154.92 | 39.96 → 32.25 |
+| Peak sampled working-set sum, MiB | 807 → 824 | 1,434 → 1,409 | 2,844 → 2,807 | 1,532 → 1,440 |
+
+The largest workload retains about 20% less renderer JS heap. Document switching
+improves modestly (about 8% in stress), and replace-all benefits from cheaper
+capacity checks even though its search algorithm is unchanged. Single save
+samples vary, including slower results on smaller cases; they do not support a
+general end-to-end save-speed claim. Total working-set peaks remain high and
+are not materially improved in the stress case. Full drawer serialization and
+DOM rebuilding remain scalability limits; this is not a claim that every action
+or every machine is faster.
+
+The comparison uses raw reports from `build/performance/2026-11-25T09-36-54-698Z/`
+and `build/performance/2026-11-25T09-57-36-536Z/` in the development workspace.
+All original documents and titles survived the final disk checks. The full unit
+suite (227 tests) and Electron smoke, recovery, and writing suites also passed.
 
 ## Distribution
 

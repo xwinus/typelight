@@ -6,10 +6,15 @@ const { randomUUID } = require('node:crypto');
 
 const MAXIMUM_BYTES = 50 * 1024 * 1024;
 const ALLOWED_KEYS = new Set(['typelight.text', 'typelight.edited', 'typelight.title',
-  'typelight.drawer', 'typelight.prefs']);
+  'typelight.drawer', 'typelight.prefs', 'typelight.document']);
 const invalid = reason => new Error(`The library could not be read safely: ${reason}. Its files have not been replaced.`);
 const tooLarge = () => new Error('The library exceeds the 50 MB storage limit. Export your text before continuing.');
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const validPosition = value => isObject(value) && ['anchor', 'caret', 'view']
+  .every(key => Number.isSafeInteger(value[key]) && value[key] >= 0);
+const SNAPSHOT_PREFIX = Buffer.from('{"version":1,"values":{');
+const SNAPSHOT_SUFFIX = Buffer.from('}}');
+const COMMA = Buffer.from(',');
 
 function parseJSON(value, name) {
   try { return JSON.parse(value); } catch { throw invalid(`invalid ${name}`); }
@@ -17,6 +22,7 @@ function parseJSON(value, name) {
 
 function validDrawerItem(item) {
   if (!isObject(item) || typeof item.id !== 'string' || typeof item.text !== 'string') return false;
+  if (item.position !== undefined && !validPosition(item.position)) return false;
   if (item.title !== undefined && typeof item.title !== 'string') return false;
   for (const key of ['at', 'gone']) {
     if (item[key] !== undefined && (!Number.isFinite(item[key]) || item[key] < 0)) return false;
@@ -30,22 +36,37 @@ function validDrawerItem(item) {
   return true;
 }
 
-function validate(values) {
+function ownValues(values) {
   if (!isObject(values) || ![Object.prototype, null].includes(Object.getPrototypeOf(values))) {
     throw invalid('unsupported value types');
   }
+  const result = {};
+  for (const key of Reflect.ownKeys(values)) {
+    if (!ALLOWED_KEYS.has(key)) throw invalid('unknown storage keys');
+    const property = Object.getOwnPropertyDescriptor(values, key);
+    if (!property.enumerable || typeof property.value !== 'string') throw invalid('unsupported value types');
+    result[key] = property.value;
+  }
+  return result;
+}
+
+function validate(values, previous = {}, encoded = new Map()) {
   let bytes = 0;
   for (const [key, value] of Object.entries(values)) {
-    if (!ALLOWED_KEYS.has(key)) throw invalid('unknown storage keys');
-    if (typeof value !== 'string') throw invalid('unsupported value types');
-    bytes += Buffer.byteLength(key) + Buffer.byteLength(value);
+    const cached = encoded.get(key);
+    bytes += cached?.value === value ? cached.bytes : Buffer.byteLength(key) + Buffer.byteLength(value);
   }
   if (bytes > MAXIMUM_BYTES) throw tooLarge();
+  const changed = key => values[key] !== undefined && values[key] !== previous[key];
+  if (changed('typelight.document')) {
+    const document = parseJSON(values['typelight.document'], 'document position');
+    if (!validPosition(document) || typeof document.id !== 'string' || !document.id) throw invalid('invalid document position');
+  }
   const edited = values['typelight.edited'];
-  if (edited !== undefined && (!edited.trim() || !Number.isFinite(Number(edited)) || Number(edited) < 0)) {
+  if (changed('typelight.edited') && (!edited.trim() || !Number.isFinite(Number(edited)) || Number(edited) < 0)) {
     throw invalid('invalid document timestamp');
   }
-  if (values['typelight.drawer'] !== undefined) {
+  if (changed('typelight.drawer')) {
     const drawer = parseJSON(values['typelight.drawer'], 'drawer contents');
     if (!isObject(drawer) || drawer.v !== 1 || !Array.isArray(drawer.pile) || !Array.isArray(drawer.bin)) {
       throw invalid('invalid drawer contents');
@@ -54,9 +75,33 @@ function validate(values) {
     if (!items.every(validDrawerItem)) throw invalid('invalid drawer document metadata');
     if (new Set(items.map(item => item.id)).size !== items.length) throw invalid('duplicate drawer document identifiers');
   }
-  if (values['typelight.prefs'] !== undefined && !isObject(parseJSON(values['typelight.prefs'], 'preferences'))) {
+  if (changed('typelight.prefs') && !isObject(parseJSON(values['typelight.prefs'], 'preferences'))) {
     throw invalid('invalid preferences');
   }
+}
+
+function encodeSnapshot(values, previous) {
+  const chunks = [SNAPSHOT_PREFIX], entries = [];
+  let length = SNAPSHOT_PREFIX.length;
+  for (const [key, value] of Object.entries(values)) {
+    if (entries.length) { chunks.push(COMMA); length++; }
+    const cached = previous.get(key);
+    const entry = cached?.value === value ? cached : {
+      value, bytes: Buffer.byteLength(key) + Buffer.byteLength(value),
+      chunk: Buffer.from(JSON.stringify(key) + ':' + JSON.stringify(value)),
+    };
+    entries.push({ key, entry, offset: length });
+    chunks.push(entry.chunk);
+    length += entry.chunk.length;
+    if (length + SNAPSHOT_SUFFIX.length > MAXIMUM_BYTES) throw tooLarge();
+  }
+  chunks.push(SNAPSHOT_SUFFIX);
+  const data = Buffer.concat(chunks, length + SNAPSHOT_SUFFIX.length);
+  // Slices share only this new snapshot, so cached fields cannot retain older full libraries.
+  const encoded = new Map(entries.map(({ key, entry, offset }) => [key, {
+    value: entry.value, bytes: entry.bytes, chunk: data.subarray(offset, offset + entry.chunk.length),
+  }]));
+  return { data, encoded };
 }
 
 function readSnapshot(file) {
@@ -96,6 +141,7 @@ function atomicWrite(file, data) {
 
 class LibraryStore {
   #values = {};
+  #encoded = new Map();
   #persistedData = null;
   #lastBackupTime = null;
   #clock;
@@ -126,19 +172,23 @@ class LibraryStore {
     if (!isObject(envelope) || Object.keys(envelope).sort().join(',') !== 'values,version' || envelope.version !== 1) {
       throw invalid('unsupported format or value types');
     }
-    validate(envelope.values);
-    return { ...envelope.values };
+    const values = ownValues(envelope.values);
+    validate(values);
+    return values;
+  }
+
+  patch(changes) {
+    this.replace({ ...this.#values, ...ownValues(changes) });
   }
 
   replace(replacement) {
-    validate(replacement);
-    const values = Object.fromEntries(Object.entries(replacement).sort(([a], [b]) => a.localeCompare(b)));
-    const data = Buffer.from(JSON.stringify({ version: 1, values }));
-    if (data.length > MAXIMUM_BYTES) throw tooLarge();
+    const values = Object.fromEntries(Object.entries(ownValues(replacement)).sort(([a], [b]) => a.localeCompare(b)));
+    validate(values, this.#values, this.#encoded);
     this.#assertUnchanged();
     const sameValues = Object.keys(values).length === Object.keys(this.#values).length &&
       Object.entries(values).every(([key, value]) => this.#values[key] === value);
     if (sameValues && this.#persistedData !== null) return;
+    const { data, encoded } = encodeSnapshot(values, this.#encoded);
 
     const now = this.#clock();
     if (this.#persistedData !== null &&
@@ -150,6 +200,7 @@ class LibraryStore {
     }
     atomicWrite(this.filePath, data);
     this.#values = values;
+    this.#encoded = encoded;
     this.#persistedData = data;
     try { this.#pruneBackups(); } catch { /* An already completed save must remain successful. */ }
   }

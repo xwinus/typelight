@@ -1,0 +1,31 @@
+.hud .find {
+  box-sizing: border-box;
+  width: min(570px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 10px 14px;
+  color: #d9c9b1;
+}
+.hud .find .find-query { flex: 1 1 180px; width: auto; }
+.hud .find button:focus-visible {
+  outline: 2px solid #e8c897;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.hud .find button:disabled { opacity: .45; }
+.hud .find .replace-row {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  border-top: 1px solid rgba(236,214,178,.2);
+  padding-top: 4px;
+}
+.hud .find .replace-row[hidden] { display: none; }
+.hud .find .replace-row input { flex: 1 1 180px; width: auto; }
+.hud .find .replace-status { flex: 1 1 100%; font-size: 12px; line-height: 1.45; }
+.hud .find .replace-status:empty { display: none; }
+.hud .find .replace-scope { flex: 1 1 100%; font-size: 12px; line-height: 1.45; }

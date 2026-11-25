@@ -1,0 +1,39 @@
+.version-history {
+  box-sizing: border-box; width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px); margin: auto; padding: 24px; overflow: auto;
+  border: 1px solid #77664c; border-radius: 20px; background: #25211e; color: #ede2cf;
+  box-shadow: 0 24px 80px #0009; font: 14px/1.5 system-ui, sans-serif; color-scheme: dark;
+}
+.version-history::backdrop { background: #100c08a6; backdrop-filter: blur(5px); }
+.version-history header, .version-history footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.version-history h1 { margin: 0; font-size: 21px; font-weight: 600; }
+.version-history p { margin: 12px 0; color: #d3c5b2; }
+.version-history button, .version-history select {
+  border: 1px solid #8b795e; border-radius: 8px; background: #393127; color: #f1e7d6;
+  padding: 8px 12px; min-height: 36px; font: inherit;
+}
+.version-history button { cursor: pointer; }
+.version-history button:hover:not(:disabled) { background: #514330; }
+.version-history :disabled { opacity: .5; cursor: default; }
+.version-history :focus-visible { outline: 2px solid #e5c597; outline-offset: 3px; }
+.history-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.history-choices label { display: grid; gap: 6px; min-width: 0; }
+.history-choices select { width: 100%; min-width: 0; }
+#historyPreview {
+  margin: 12px 0; min-height: 100px; max-height: 35dvh; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; border-radius: 8px;
+  background: #f5eddb; color: #241c14; font: 15px/1.6 'Courier Prime', monospace;
+}
+#historyDetails { font-size: 12px; }
+#historyError { color: #ffc59f; }
+.version-history footer { flex-wrap: wrap; margin-top: 18px; }
+@media (max-width: 540px) {
+  .version-history { padding: 18px; }
+  .history-choices { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .version-history::backdrop { backdrop-filter: none; background: #100c08ed; }
+}
+@media print { .version-history { display: none !important; } }

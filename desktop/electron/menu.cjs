@@ -7,8 +7,10 @@ function installMenu(command) {
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: 'File', submenu: [
       item('New Text', 'bNew', 'CmdOrCtrl+N'), item('Open…', 'bOpen', 'CmdOrCtrl+O'),
+      item('Rename Current Text…', 'renameCurrent', 'CmdOrCtrl+Shift+N'),
       item('Export Text…', 'bSave', 'CmdOrCtrl+S'), item('Back Up Library…', 'bBackup', 'CmdOrCtrl+Shift+S'),
-      separator, item('Show Automatic Backups', 'backups'), item('Recover from Snapshot…', 'restore'),
+      separator, item('Version History…', 'history'),
+      item('Show Automatic Backups', 'backups'), item('Recover from Snapshot…', 'restore'),
       separator, item('Print…', 'print', 'CmdOrCtrl+P'), separator,
       { role: process.platform === 'darwin' ? 'close' : 'quit' },
     ] },
@@ -17,6 +19,7 @@ function installMenu(command) {
       { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
       item('Copy Entire Text', 'copyText', 'CmdOrCtrl+Shift+C'), separator,
       item('Find…', 'bFind', 'CmdOrCtrl+F'),
+      item('Find and Replace…', 'replace', 'CmdOrCtrl+Shift+F'),
     ] },
     { label: 'View', submenu: [
       item('Drawer', 'bDrawer', 'CmdOrCtrl+Shift+D'), item('Page Overview', 'bPages', 'CmdOrCtrl+Shift+P'),

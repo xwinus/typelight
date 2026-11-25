@@ -680,8 +680,13 @@
 <link rel="stylesheet" href="editor/metal.css">
 <script src="editor/metal.js"></script>
 <script src="editor/selection.js"></script>
+<script src="editor/document-session.js"></script>
 <script src="editor/import.js"></script>
+<script src="editor/find.js"></script>
+<link rel="stylesheet" href="editor/find.css">
 <script src="editor/accessibility.js"></script>
+<link rel="stylesheet" href="editor/writing-options.css">
+<script src="editor/writing-options.js"></script>
 <script src="editor/tooltips.js"></script>
 </head>
 <body>
@@ -741,9 +746,18 @@
     </div>
     <span class="hint" id="hint" aria-live="polite"></span>
     <span class="find" id="find" hidden>
-      <input id="findIn" type="text" placeholder="Find" aria-label="Find in the text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <input id="findIn" class="find-query" type="text" placeholder="Find" aria-label="Find in the text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
       <span class="n" id="findN" aria-live="polite"></span>
       <button type="button" id="findMore" hidden></button>
+      <button type="button" id="findReplaceToggle" aria-expanded="false" aria-controls="replaceRow">Replace…</button>
+      <button type="button" id="findClose" aria-label="Close find">Close</button>
+      <span class="replace-row" id="replaceRow" hidden>
+        <input id="replaceIn" type="text" placeholder="Replace with" aria-label="Replace with" autocomplete="off" spellcheck="false">
+        <button type="button" id="replaceOne">Replace</button>
+        <button type="button" id="replaceAll">Replace all</button>
+        <span class="replace-scope">Current text only · ignores case and accents</span>
+        <span class="replace-status" id="replaceStatus" role="status"></span>
+      </span>
     </span>
     <nav aria-label="Text tools">
       <button type="button" id="bPages" data-key="p" title="Every page of this text, laid out on the table" aria-expanded="false" aria-controls="spread" hidden>Pages</button>
@@ -787,6 +801,7 @@ const TEXT_KEY = 'typelight.text', PREF_KEY = 'typelight.prefs';
 const desktop = window.typelightDesktop;
 const desktopToolbar = Boolean(window.typelightHost);
 const AT_KEY = 'typelight.edited', PILE_KEY = 'typelight.drawer', TITLE_KEY = 'typelight.title';
+const DOCUMENT_KEY = 'typelight.document';
 const isDemo = () => location.hash.toLowerCase() === '#demo';
 const DEMO = isDemo();      // a drawer of sample sheets to play with; nothing is read or saved
 const DESK_TILE = 36;       // one tile of the desk photograph, in line heights
@@ -812,7 +827,8 @@ const S = {
   drop: 0, dl: 0, dw: 0, hud: 0,   // the drawer: how far the view drops for it, its left edge and width; the controls' height
   at: Date.now(),                  // when the text in the machine was last typed on
   title: '',                       // ... and its name, if it has been given one
-  sound: true, lamp: 2, fresh: -1, reading: false, zoom: 1,
+  documentId: TypelightDocuments.newId(),
+  sound: true, volume: 1, lamp: 2, fresh: -1, reading: false, zoom: 1,
 };
 
 const store = {
@@ -1390,6 +1406,7 @@ function place(moveMs, feedMs, ease = EASE_STEP) {
 }
 
 function measure() {
+  const position = S.lines.length ? capturePosition() : null;
   const vv = window.visualViewport;
   S.vw = window.innerWidth;
   S.vh = Math.round(vv ? vv.height : window.innerHeight);
@@ -1450,7 +1467,7 @@ function measure() {
   }
   for (const el of pageEls.values()) el.remove();
   pageEls.clear();
-  if (S.scroll) S.scroll = rowY(S.row) - rowY(rowAtHead());      // (still with a line under the head)
+  if (position) restorePosition(position);
   S.snapFrom = S.scroll;
   light.size();
   drawerLight.size();
@@ -1536,7 +1553,7 @@ const snd = (() => {
       // A plain gain and nothing else: a compressor or limiter here would delay
       // every strike by its look-ahead, and lag is the one thing a key must not have.
       out = ctx.createGain();
-      out.gain.value = .9;
+      out.gain.value = TypelightWritingOptions.gainFor(S.volume, S.sound);
       out.connect(ctx.destination);
     }
     if (ctx.state === 'suspended') ctx.resume();
@@ -1584,6 +1601,11 @@ const snd = (() => {
 
   return {
     load, ensure,
+    setVolume() {
+      if (!out) return;
+      out.gain.cancelScheduledValues(ctx.currentTime);
+      out.gain.setTargetAtTime(TypelightWritingOptions.gainFor(S.volume, S.sound), ctx.currentTime, .01);
+    },
     get failed() { return failed; },
     // what the browser reports between "play" and the speaker, in ms (null if unknown)
     get latency() {
@@ -1658,50 +1680,14 @@ let struck = null;       // the sound already played on key down for the input t
 // at a time. So the steps are kept here instead. A run of typing in one place is one step,
 // up to a new line, and so is a run of rubbing out; a character put together from a dead
 // key joins the run it continues. A step is the text as it was before it, and where the head was.
-const edits = (() => {
-  const MAX = 500;
-  let back = [], fwd = [], run = null;      // run: what the last change was, and where it left off
-  let replaying = false;
-  // (at: where the head is after the change; it tells where a letter went in a run of the same ones)
-  function note(before, caret, after, at, anchor = caret) {
-    if (replaying) return;
-    const least = Math.min(before.length, after.length);
-    let p = 0, q = 0;
-    while (p < least && before.charCodeAt(p) === after.charCodeAt(p)) p++;
-    while (q < least - p && before.charCodeAt(before.length - 1 - q) === after.charCodeAt(after.length - 1 - q)) q++;
-    const del = before.length - p - q, add = after.length - p - q;
-    const kind = add && !del ? 'type' : del && !add ? 'rub' : 'other';
-    const goesOn = anchor === caret && run && kind === run.kind && (
-      kind === 'type' ? at - add === run.at && after[at - add] !== '\n' :
-      kind === 'rub' ? at + del === run.at || at === run.at :      // (rubbing out backwards, or forwards)
-      false);
-    if (!goesOn) {
-      back.push({ text: before, caret, anchor });
-      if (back.length > MAX) back.shift();
-    }
-    fwd = [];
-    run = anchor === caret ? { kind, at } : null;
-  }
-  function step(from, to) {
-    const s = from.pop();
-    if (!s) return;
-    to.push({ text: S.text, caret: S.caret, anchor: S.anchor });
-    run = null;
-    replaying = true;
-    ta.value = s.text;
-    ta.setSelectionRange(Math.min(s.anchor, s.caret), Math.max(s.anchor, s.caret),
-      s.caret < s.anchor ? 'backward' : 'forward');
+const edits = TypelightDocuments.createHistory(
+  () => ({ text: S.text, caret: S.caret, anchor: S.anchor }),
+  saved => {
+    ta.value = saved.text;
+    ta.setSelectionRange(Math.min(saved.anchor, saved.caret), Math.max(saved.anchor, saved.caret),
+      saved.caret < saved.anchor ? 'backward' : 'forward');
     onInput();
-    replaying = false;
-  }
-  return {
-    note,
-    break() { run = null; },
-    undo: () => step(back, fwd),
-    redo: () => step(fwd, back),
-    reset() { back = []; fwd = []; run = null; },
-  };
-})();
+  });
 
 const returnTravel = cols => Math.max(.25, Math.min(1, cols / S.cols)) * RETURN_SWEEP;
 
@@ -1810,21 +1796,42 @@ function onInput() {
 }
 
 // Puts a whole other text on the sheet at once and without a sound: a sheet from the drawer.
-function setText(text) {
-  edits.reset();                            // (what was done to another text cannot be undone on this one)
+function setText(text, saved = null) {
+  edits.select(S.documentId, text);
   for (const el of els.values()) el.remove();
   els.clear();
   ta.value = text;
   S.text = text;
   S.fresh = -1;
   S.scroll = 0; S.snapFrom = 0;
-  S.anchor = S.caret = text.length;                    // a text is taken up where it was left: at its end
+  const position = TypelightDocuments.position(text, saved);
+  S.anchor = position.anchor; S.caret = position.caret;
   layoutAll();
+  restorePosition(position);
   S.goal = S.col;
   place(0, 0);
   renderLines();
   pinCaret();
   find.refresh();                           // (if a word is being looked for: in this text now)
+}
+
+function capturePosition() {
+  return { anchor: S.anchor, caret: S.caret, view: S.lines[rowAtHead()]?.s ?? S.caret };
+}
+
+function currentDocument() {
+  return { id: S.documentId, text: S.text, at: S.at, position: capturePosition(), ...(S.title && { title: S.title }) };
+}
+
+function restorePosition(saved) {
+  const position = TypelightDocuments.position(S.text, saved);
+  S.anchor = position.anchor; S.caret = position.caret;
+  locate();
+  const viewRow = Math.max(0, S.lines.findLastIndex(line => line.s <= position.view));
+  S.scroll = rowY(S.row) - rowY(viewRow);
+  S.snapFrom = S.scroll;
+  ta.setSelectionRange(Math.min(S.anchor, S.caret), Math.max(S.anchor, S.caret),
+    S.caret < S.anchor ? 'backward' : 'forward');
 }
 
 function thud() {
@@ -1901,6 +1908,7 @@ function setScroll(v, feedMs = 0) {
   const was = S.scroll;
   S.snapFrom = feedMs ? S.scroll : v;
   S.scroll = v;
+  rememberPosition();
   place(0, reduce ? 0 : feedMs);
   renderLines();
   S.snapFrom = v;
@@ -2018,7 +2026,7 @@ document.addEventListener('keydown', e => {
   }
   if ((MAC ? e.metaKey : e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F' || e.key === 'g' || e.key === 'G')) {
     e.preventDefault();                     // (not the browser's own Find)
-    if (e.key === 'f' || e.key === 'F') find.start();
+    if (e.key === 'f' || e.key === 'F') find.start(e.shiftKey);
     else find.step(e.shiftKey ? -1 : 1);    // Cmd/Ctrl+G, and with Shift: the next place, the one before
     return;
   }
@@ -2231,9 +2239,12 @@ void main() {
     w = el.offsetWidth; h = el.offsetHeight;
     if (!gl || !w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    cv.width = Math.round(w * dpr);
-    cv.height = Math.round(h * dpr);
-    gl.viewport(0, 0, cv.width, cv.height);
+    const width = Math.round(w * dpr), height = Math.round(h * dpr);
+    if (cv.width !== width || cv.height !== height) {
+      cv.width = width;
+      cv.height = height;
+      gl.viewport(0, 0, width, height);
+    }
     wake();
   }
 
@@ -2990,10 +3001,12 @@ const drawer = (() => {
     (sheetsOf(sh) > 1 ? ', ' + sheetsOf(sh) + ' pages' : '');
   // what the renderer of crumpled paper wants to know about a sheet
   const paperOf = sh => ({ id: sh.id, seed: seedOf(sh.id), text: sh.text, note: noteOf(sh) });
+  const dayFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+  const fullDayFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   function day(at) {
-    const d = new Date(at), opts = { day: 'numeric', month: 'short' };
-    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-    return d.toLocaleDateString('en-GB', opts);
+    const d = new Date(at);
+    if (!Number.isFinite(d.getTime())) return 'Invalid Date';
+    return (d.getFullYear() === new Date().getFullYear() ? dayFormat : fullDayFormat).format(d);
   }
 
   function load() {
@@ -3106,13 +3119,17 @@ const drawer = (() => {
     }) };
   }
   const SPIN = { ax: 1, ay: 0, angle: 4 };      // for a ball that does not remember how it rolled
-  function arrange() {
-    // (how many pages a text fills depends on how long a line is: the notes are written again)
-    for (const b of pile.children) {
-      const sh = b.dataset.id && sheets.find(x => x.id === b.dataset.id);
-      if (!sh) continue;
-      b.querySelector('.note').textContent = noteOf(sh);
-      if (b.classList.contains('thick') !== sheetsOf(sh) > 1) b.replaceWith(leaf(sh));
+  function arrange(refreshLeaves = true) {
+    // Newly rendered leaves already have current notes and page counts.
+    if (refreshLeaves) {
+      const byId = new Map();
+      for (const sh of sheets) if (!byId.has(sh.id)) byId.set(sh.id, sh);
+      for (const b of pile.children) {
+        const sh = b.dataset.id && byId.get(b.dataset.id);
+        if (!sh) continue;
+        b.querySelector('.note').textContent = noteOf(sh);
+        if (b.classList.contains('thick') !== sheetsOf(sh) > 1) b.replaceWith(leaf(sh));
+      }
     }
     const sp = spots();
     root.style.setProperty('--band', sp.band + 'px');
@@ -3150,7 +3167,7 @@ const drawer = (() => {
     pile.appendChild(leaf(null));
     for (const sh of sheets) pile.appendChild(leaf(sh));
     if (sought) marks();
-    const sp = arrange();
+    const sp = arrange(false);
     paintHint();
     if (open) paintCount();
     return sp;
@@ -3165,12 +3182,13 @@ const drawer = (() => {
     if (id && !next) return;
     persist();
     if (next) sheets.splice(sheets.indexOf(next), 1);
-    const had = S.text.trim() !== '';
-    if (had) sheets.unshift(parked || { id: uid(), text: S.text, at: S.at, ...(S.title && { title: S.title }) });
+    const had = S.text.trim() !== '' || Boolean(S.title);
+    if (had) sheets.unshift(parked || currentDocument());
     if (next || had) {
+      S.documentId = next ? next.id : TypelightDocuments.newId();
       S.at = next ? next.at : Date.now();
       S.title = next && next.title || '';
-      setText(next ? next.text : '');
+      setText(next ? next.text : '', next?.position);
       persist();
       save();
       render();
@@ -3212,7 +3230,7 @@ const drawer = (() => {
     const slip = b.querySelector('.slip'), r = slip.getBoundingClientRect(), w = well.getBoundingClientRect();
     const inp = document.createElement('input');
     inp.className = 'slip-in';
-    inp.maxLength = 48;
+    inp.maxLength = 120;
     inp.value = sh.title || '';
     inp.placeholder = 'Name it';
     inp.spellcheck = false;
@@ -3553,8 +3571,8 @@ const drawer = (() => {
   // the floor is left out: it was thrown away.
   function backup() {
     persist();
-    const machine = { text: S.text, at: S.at, ...(S.title && { title: S.title }) };
-    const n = sheets.length + (S.text.trim() ? 1 : 0);
+    const machine = currentDocument();
+    const n = sheets.length + (S.text.trim() || S.title ? 1 : 0);
     download('typelight-backup-' + stamp() + '.json', JSON.stringify({ typelight: 1, saved: new Date().toISOString(), machine, drawer: sheets }, null, 1), 'application/json');
     if (!desktop) say(n ? `Backed up ${n === 1 ? 'one text' : n + ' texts'} to a file.` : 'There is nothing to back up yet.', 4000);
   }
@@ -3563,19 +3581,24 @@ const drawer = (() => {
   // else goes on top of the pile, in its order, with the drawer pulled out to show it.
   // Nothing here is replaced, and a text that is here already is not brought in twice.
   // (not: names of files that were neither)
-  function bring(items, { machine = false, not = [] } = {}) {
-    const all = items.filter(x => x && typeof x.text === 'string' && x.text.trim());
+  function bring(items, { machine = false, not = [], copy = false } = {}) {
+    const titleOf = x => typeof x.title === 'string' ? x.title.trim().slice(0, 120) : '';
+    const keyOf = x => JSON.stringify(x.text.trim() ? [x.text] : [x.text, titleOf(x)]);
+    const all = items.filter(x => x && typeof x.text === 'string' && (copy || x.text.trim() || titleOf(x)));
     const notes = not.length ? ' ' + (not.length === 1 ? `(${not[0]} is not a text file or a Typelight backup.)` : `(${not.length} of the files are not text files or Typelight backups.)`) : '';
-    const ids = new Set([...sheets, ...bin].map(x => x.id));
+    const ids = new Set([S.documentId, ...sheets.map(x => x.id), ...bin.map(x => x.id)]);
     const make = x => {
-      const id = typeof x.id === 'string' && x.id && !ids.has(x.id) ? x.id : uid();
+      const id = !copy && typeof x.id === 'string' && x.id && !ids.has(x.id) ? x.id : uid();
       ids.add(id);
-      const title = typeof x.title === 'string' ? x.title.trim().slice(0, 120) : '';
-      return { id, text: x.text, at: Number.isFinite(x.at) ? x.at : Date.now(), ...(title && { title }) };
+      const title = titleOf(x);
+      return { id, text: x.text, at: Number.isFinite(x.at) ? x.at : Date.now(),
+        position: TypelightDocuments.position(x.text, x.position), ...(title && { title }) };
     };
     const fits = (pile, current = S) => {
       if (!desktop || desktop.canStore({
         [TEXT_KEY]: current.text, [TITLE_KEY]: current.title || '', [AT_KEY]: String(current.at),
+        [DOCUMENT_KEY]: JSON.stringify({ id: current.id || S.documentId,
+          ...(current === S ? capturePosition() : TypelightDocuments.position(current.text, current.position)) }),
         [PILE_KEY]: JSON.stringify({ v: 1, pile, bin }),
       })) return true;
       tell('Nothing was imported: the combined library would exceed the 50 MiB storage limit. Export and remove some texts before trying again.', 9000);
@@ -3583,33 +3606,34 @@ const drawer = (() => {
     };
     if (!all.length) {
       tell(not.length ? (not.length === 1 ? `${not[0]} is not a text file or a Typelight backup.` : 'None of those files is a text file or a Typelight backup.') : 'There is no text in that.', 6000);
-      return;
+      return false;
     }
     if (machine && all.length === 1) {
       const x = all[0];
-      if (x.text === S.text) { tell('That text is in the machine already.'); return; }
-      let sh = sheets.find(y => y.text === x.text);
+      if (!copy && keyOf(x) === keyOf(S)) { tell('That text is in the machine already.'); return; }
+      let sh = !copy && sheets.find(y => keyOf(y) === keyOf(x));
       const existing = Boolean(sh);
       if (!sh) sh = make(x);
-      const putAway = S.text.trim() !== '';
-      const parked = putAway ? { id: uid(), text: S.text, at: S.at, ...(S.title && { title: S.title }) } : null;
+      const putAway = S.text.trim() !== '' || Boolean(S.title);
+      const parked = putAway ? currentDocument() : null;
       const nextPile = sheets.filter(item => item !== sh);
       if (parked) nextPile.unshift(parked);
-      if (!fits(nextPile, sh)) return;
+      if (!fits(nextPile, sh)) return false;
       if (!existing) sheets.unshift(sh);
       swap(sh.id, parked);
       tell('Opened' + (sh.title ? ' ' + sh.title : '') + (putAway ? '; the text that was in the machine is in the drawer' : '') + '.' + notes, 5000);
-      return;
+      return true;
     }
-    const here = new Set([S.text, ...sheets.map(x => x.text)]);
+    const here = new Set([keyOf(S), ...sheets.map(keyOf)]);
     const add = [];
     for (const x of all) {
-      if (here.has(x.text)) continue;
-      here.add(x.text);
+      const key = keyOf(x);
+      if (!copy && here.has(key)) continue;
+      here.add(key);
       add.push(make(x));
     }
     const had = all.length - add.length;
-    if (add.length && !fits(add.concat(sheets))) return;
+    if (add.length && !fits(add.concat(sheets))) return false;
     if (!open) set(true);
     if (!add.length) {
       say((all.length === 1 ? 'That text is' : 'Every one of those texts is') + ' here already.' + notes, 6000);
@@ -3623,6 +3647,7 @@ const drawer = (() => {
     snd.tick();
     say((add.length === 1 ? 'One text' : add.length + ' texts') + ' brought in, on top of the pile.' +
       (had ? ` (${had === 1 ? 'One was' : had + ' were'} here already.)` : '') + notes, 7000);
+    return true;
   }
   // said in the drawer while it is out, beside the word count while it is not
   function tell(msg, ms = 5000) {
@@ -3961,111 +3986,24 @@ void main() {
  * from the rest while the drawer is out. Neither capitals nor accents
  * count: "zivot" finds "Život".
  * ------------------------------------------------------------------ */
-// The text with capitals made small and accents taken off, a character for a character,
-// so a place in it is the same place in the text.
-function fold(t) {
-  let out = '';
-  for (let i = 0; i < t.length; i++) {
-    const c = t[i];
-    if (c.charCodeAt(0) < 128) { out += c.toLowerCase(); continue; }
-    const f = c.normalize('NFD')[0].toLowerCase();
-    out += f.length === 1 ? f : c;
-  }
-  return out;
-}
+function fold(text) { return TypelightFind.fold(text); }
 // Draws the lines on the paper again: what is marked on them has changed.
 function repaintLines() {
   for (const el of els.values()) el._ln = null;
   renderLines();
 }
-const find = (() => {
-  const box = $('find'), input = $('findIn'), nEl = $('findN'), more = $('findMore');
-  let open = false, q = '', hits = [], cur = -1, inDrawer = 0;
-  let folded = { text: null, f: '' };
-  const foldedText = () => {
-    if (folded.text !== S.text) folded = { text: S.text, f: fold(S.text) };
-    return folded.f;
-  };
-  function search() {
-    hits = [];
-    if (q) {
-      const f = foldedText();
-      for (let i = f.indexOf(q); i !== -1 && hits.length < 20000; i = f.indexOf(q, i + q.length)) hits.push({ s: i, e: i + q.length });
-    }
-    inDrawer = drawer.seek(open ? q : null, input.value);
-  }
-  function paint() {
-    S.found = open && hits.length ? { hits, cur } : null;
-    repaintLines();
-    nEl.textContent = !q ? '' : hits.length ? `${cur + 1} of ${hits.length}` : 'Not in this text';
-    more.hidden = !q || !inDrawer;
-    const n = inDrawer === 1 ? 'one text' : inDrawer + ' texts';
-    more.textContent = drawer.open ? `${n} in the drawer` : `also in ${n} in the drawer`;
-    more.disabled = drawer.open;
-  }
-  // the first place at or after the head
-  const near = () => { const i = hits.findIndex(x => x.s >= S.caret); return i < 0 ? 0 : i; };
-  function to(k) {
-    if (!hits.length) return;
-    cur = (k + hits.length) % hits.length;
-    paint();
-    if (!drawer.open) goTo(hits[cur].s);
-  }
-  function start() {
-    if (spread.open) spread.set(false);
-    if (!open) {
-      open = true;
-      box.hidden = false;
-      root.classList.add('finding');
-      $('bFind').setAttribute('aria-expanded', 'true');
-      if (q) { search(); cur = hits.length ? near() : -1; paint(); }
-    }
-    wake();
-    input.focus({ preventScroll: true });
-    input.select();
-  }
-  function close(refocus = true) {
-    if (!open) return;
-    open = false;
-    box.hidden = true;
-    root.classList.remove('finding');
-    $('bFind').setAttribute('aria-expanded', 'false');
-    hits = []; cur = -1;
-    drawer.seek(null);
-    S.found = null;
-    repaintLines();
-    if (refocus) ta.focus({ preventScroll: true });
-  }
-  input.addEventListener('input', () => {
-    q = fold(input.value);
-    search();
-    cur = hits.length ? near() : -1;
-    paint();
-    if (hits.length && !drawer.open) goTo(hits[cur].s);
-  });
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); to(cur + (e.shiftKey ? -1 : 1)); }
-    else if (e.key === 'Escape') { e.preventDefault(); close(); }
-  });
-  more.addEventListener('pointerdown', e => e.preventDefault());       // (the find box keeps the keys)
-  more.addEventListener('click', () => { if (!drawer.open) drawer.set(true); });
-  return {
-    get open() { return open; },
-    has: node => box.contains(node),
-    start, close,
-    step(d) { if (!open) start(); else to(cur + d); },
-    // another text is in the machine: look in that one, from its start
-    refresh() {
-      if (!open) return;
-      search();
-      cur = hits.length ? 0 : -1;
-      paint();
-      if (hits.length) setTimeout(() => { if (open && hits[cur]) goTo(hits[cur].s); }, 0);
-    },
-    // the drawer has come out or gone in
-    sync() { if (open) paint(); },
-  };
-})();
+const find = TypelightFind.install({ state: S, ta, drawer, spread, root, wake,
+  repaint: repaintLines, goTo,
+  apply(result) {
+    if (desktop && !desktop.canStore({ [TEXT_KEY]: result.text })) return false;
+    edits.break();
+    ta.value = result.text;
+    ta.setSelectionRange(result.caret, result.caret);
+    onInput();
+    edits.break();
+    return true;
+  },
+});
 
 /* ------------------------------------------------------------------ *
  * Controls, saving
@@ -4074,12 +4012,19 @@ function words(n) {
   return n + (n === 1 ? ' word' : ' words');
 }
 let desktopCheckpoint = 0;
+let positionTimer = 0;
+function rememberPosition() {
+  clearTimeout(positionTimer);
+  positionTimer = setTimeout(() => { if (!behind) persist(); }, 600);
+}
 function persist() {
+  clearTimeout(positionTimer);
   clearTimeout(saveTimer);
   clearTimeout(desktopCheckpoint);
   desktopCheckpoint = 0;
   if (!behind) {                            // (another tab has written since: see "Two tabs")
-    const ok = [store.set(TEXT_KEY, S.text), store.set(AT_KEY, String(S.at)), store.set(TITLE_KEY, S.title)];
+    const ok = [store.set(TEXT_KEY, S.text), store.set(AT_KEY, String(S.at)), store.set(TITLE_KEY, S.title),
+      store.set(DOCUMENT_KEY, JSON.stringify({ id: S.documentId, ...capturePosition() }))];
     kept('text', ok.every(Boolean));
   }
   paintCount();
@@ -4108,6 +4053,7 @@ let behind = false;
 window.addEventListener('storage', e => {
   if (DEMO || e.storageArea !== localStorage) return;
   if (e.key === PREF_KEY) { readPrefs(); paintPrefs(); accessibility.refresh(); accessibility.initialize(); return; }
+  // A cursor move in another tab must not discard this tab's pending writing.
   if (e.key === null || e.key === TEXT_KEY || e.key === AT_KEY || e.key === TITLE_KEY || e.key === PILE_KEY) behind = true;
 });
 function catchUp() {
@@ -4117,7 +4063,12 @@ function catchUp() {
   const text = store.get(TEXT_KEY) || '';
   S.at = Number(store.get(AT_KEY)) || Date.now();
   S.title = store.get(TITLE_KEY) || '';
-  if (text !== S.text) setText(text);
+  const document = TypelightDocuments.metadata(text, store.get(DOCUMENT_KEY));
+  if (text !== S.text || document.id !== S.documentId) {
+    edits.clear();
+    S.documentId = document.id;
+    setText(text, document);
+  }
   drawer.reload();
   paintCount();
   spread.sync();
@@ -4170,9 +4121,10 @@ function touched() {
 function wake() { hud.classList.remove('quiet'); }
 
 function savePrefs() {
-  kept('preferences', store.set(PREF_KEY, JSON.stringify({ sound: S.sound, lamp: S.lamp, reading: S.reading, zoom: S.zoom })));
+  kept('preferences', store.set(PREF_KEY, JSON.stringify({ sound: S.sound, volume: S.volume, lamp: S.lamp, reading: S.reading, zoom: S.zoom })));
 }
 function paintPrefs() {
+  snd.setVolume();
   root.style.setProperty('--lamp', LAMPS[S.lamp]);
   light.wake();
   drawerLight.wake();
@@ -4352,12 +4304,21 @@ function readPrefs() {
     const p = JSON.parse(store.get(PREF_KEY) || '{}');
     Object.assign(S, TypelightAccessibility.preferences(p));
     if (typeof p.sound === 'boolean') S.sound = p.sound;
+    S.volume = TypelightWritingOptions.volumePreference(p.volume);
     if (Number.isInteger(p.lamp) && p.lamp >= 0 && p.lamp < LAMPS.length) S.lamp = p.lamp;
   } catch { /* defaults */ }
 }
 readPrefs();
 const accessibility = TypelightAccessibility.install({ state: S, save: savePrefs, measure, desktop, demo: DEMO,
-  focusWriting: () => ta.focus({ preventScroll: true }), changed: paintReading });
+  focusWriting: () => ta.focus({ preventScroll: true }), changed: paintReading,
+  opened: () => writingOptions.refresh() });
+const writingOptions = TypelightWritingOptions.install({ state: S, savePreferences: savePrefs,
+  applyVolume: paintPrefs, focusWriting: () => ta.focus({ preventScroll: true }),
+  rename(title) {
+    if (desktop && !desktop.canStore({ [TITLE_KEY]: title })) throw new Error('The library is full. Export and remove some texts before renaming.');
+    S.title = title;
+    persist();
+  } });
 TypelightTooltips.install();
 paintPrefs();
 
@@ -4366,17 +4327,25 @@ snd.load().then(paintPrefs);
 S.text = store.get(TEXT_KEY) || '';
 S.at = Number(store.get(AT_KEY)) || Date.now();
 S.title = store.get(TITLE_KEY) || '';
+const initialDocument = TypelightDocuments.metadata(S.text, store.get(DOCUMENT_KEY));
+S.documentId = initialDocument.id;
+edits.select(S.documentId, S.text);
 ta.value = S.text;
 S.anchor = S.caret = S.text.length;
 light.init();
 drawerLight.init();
 spread.init();
 measure();
+restorePosition(initialDocument);
+place(0, 0);
+renderLines();
 accessibility.initialize();
 TypelightMetal.install({ rail: document.querySelector('.rail'), head, shading: $('gl') });
 persist();
 ta.focus({ preventScroll: true });
 pinCaret();
+
+ta.addEventListener('select', rememberPosition);
 
 // The opening: the lamp flickers on behind a sheet of frosted glass; once it burns
 // steadily, the glass clears.
@@ -4435,14 +4404,26 @@ if (desktop) desktop.attach({
     drawer.bring([backup.machine, ...backup.drawer]);
     persist();
   },
+  restoreCopy(document) {
+    if (!document || typeof document.text !== 'string' ||
+        (document.title !== undefined && typeof document.title !== 'string')) throw new Error('Invalid saved document.');
+    const title = (document.title || 'Untitled').slice(0, 104) + ' (restored copy)';
+    if (!drawer.bring([{ text: document.text, title, at: Date.now() }], { copy: true })) {
+      throw new Error('The restored copy would exceed the library storage limit. Export and remove some texts first.');
+    }
+    persist();
+    return { restored: true };
+  },
   notice: flash,
   preparePrint() { const old = $('print'); if (old) old.remove(); printSheets(); },
   finishPrint() { const old = $('print'); if (old) old.remove(); },
   command(action) {
+    if (writingOptions.command(action)) return true;
     const handled = accessibility.command(action);
     if (handled) return handled;
     if (action === 'undo') edits.undo();
     else if (action === 'redo') edits.redo();
+    else if (action === 'replace') find.start(true);
     else if (action === 'copyText') return S.text;
     else if (action === 'focus') { drawer.set(false); spread.set(false); find.close(); }
     else if (/^b(?:Drawer|Pages|New|Open|Save|Backup|Find|Lamp|Read|Sound)$/.test(action)) {

@@ -31,9 +31,11 @@ async function assetResponse(request, root) {
       data = Buffer.from(data.toString('utf8').replace('<head>', `<head>
         <script>document.documentElement.classList.add('electron');</script>
         <link rel="stylesheet" href="desktop/web/electron.css">
+        <link rel="stylesheet" href="desktop/web/history.css">
         <script src="desktop/web/counts.js"></script>
         <script src="desktop/web/bridge.js"></script>
-        <script defer src="desktop/web/chrome.js"></script>`));
+        <script defer src="desktop/web/chrome.js"></script>
+        <script defer src="desktop/web/history.js"></script>`));
     }
     return new Response(data, { status: 200, headers: {
       'Content-Type': MIME[path.extname(name).slice(1)] || 'application/octet-stream',

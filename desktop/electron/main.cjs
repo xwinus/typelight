@@ -6,6 +6,7 @@ const { openLibrary } = require('./library-recovery.cjs');
 const { assetResponse } = require('./assets.cjs');
 const { trustedFrame, validateMessage } = require('./policy.cjs');
 const files = require('./files.cjs');
+const history = require('./history.cjs');
 const { installMenu } = require('./menu.cjs');
 
 app.setName('Typelight');
@@ -59,8 +60,12 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
         return true;
       }
       case 'save': library.replace(message.values); return true;
+      case 'save-changes': library.patch(message.changes); return true;
       case 'open': return files.openFiles(window);
       case 'export': return files.exportFile(window, message);
+      case 'history-list': return history.listSnapshots(library);
+      case 'history-contents': return history.snapshotContents(library, message.id);
+      case 'history-document': return history.snapshotDocument(library, message.id, message.index, message.revision);
       case 'zoom': window.webContents.setZoomFactor(message.factor); return window.webContents.getZoomFactor();
     }
   });
@@ -71,6 +76,7 @@ async function start({ dataDirectory = process.env.TYPELIGHT_DATA_DIR, show = tr
       if (action === 'backups') return await files.showBackups(library);
       if (action === 'restore') return await files.recoverSnapshot(window, library);
       if (action === 'print') return await files.printDocument(window);
+      if (action === 'history') return await window.webContents.executeJavaScript('window.typelightHistory.open()', true);
       const value = await window.webContents.executeJavaScript(`window.typelightDesktop.command(${JSON.stringify(action)})`, true);
       if (action === 'copyText' && typeof value === 'string') clipboard.writeText(value);
     } catch (error) { fail(error); }
